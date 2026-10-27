@@ -50,6 +50,11 @@ Make Glint, Voidcaller, Riven, Fortune and Pyre playable (`available: true` in `
    changes enemy HP/damage/density and adds a twist (Nightmare: elites everywhere, bosses get an extra phase attack),
    and pays more shards. Clearing a chapter on a tier unlocks the next tier for that chapter. Show tier medals on
    the chapter cards.
+5. **Endless / Overtime Threat + curses** — Endless and Overtime get a starting Threat selector (1, 10, 20, 30) and
+   optional curse toggles: elites everywhere, no healing pickups, bosses twice as often, enemies faster, no rerolls.
+   Each raised Threat step and each curse adds a Star Shard bonus. Keep separate best records per starting Threat +
+   curse combination. Show the active curses on the HUD and the results screen. Overtime uses the chapter's
+   difficulty tier (from item 4) for its scaling.
 
 ## Phase 3 — two new chapters
 
