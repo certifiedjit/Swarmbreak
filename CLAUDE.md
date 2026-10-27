@@ -82,8 +82,19 @@ Settings has a testing toggle that unlocks everything.
   compare hero clear times with that in mind.
 - 19 weapons + 19 evolutions, 19 passives, 12 relics, 6 spells, 6 weapon + 6 passive slots.
 - Meta: hero mastery + free-refund skill trees, Star Shards + Armory, codex, records, run history, stats.
-  Not built yet: weapon unlocks (`STARTER_WEAPON_IDS` vs the rest), achievements, cosmetics + collection screen,
-  Story difficulty tiers.
+- Weapon unlocks: `src/systems/weaponUnlocks.ts` (starters + the hero's own weapon at first; Armory price and a free
+  achievement for every other weapon). The run's pool is `GameOptions.weaponPool` (`weaponPoolFor` in core/meta).
+- Difficulty: `src/systems/difficulty.ts` — Story tiers (`TIERS`, medals in `save.progress.tiers`) and the Endless /
+  Overtime challenge (starting Threat reached over `THREAT_RAMP` s, `CURSES`). The game multiplies spawns by
+  `g.mods` (`runMods`); Overtime switches the curses on and keeps the tier. Endless bests are keyed
+  `map` or `map|t10+elites` (`challengeKey`). Bot flags: `--tier`, `--threat`, `--curses`.
+- Achievements: `src/systems/achievements.ts` (pure, over an `AchContext` built by `achContext()` in core/meta);
+  `syncAchievements()` records and pays out (cosmetics, weapons, shards). The game checks once a second with a
+  run overlay so they pop mid-run. Badges: `src/render/achIcons.ts`.
+- Cosmetics: `src/data/cosmetics.ts` (skins, trails, kill bursts, number styles, banners, menu backgrounds), all earned
+  by achievements; loadout per hero via `loadoutFor` / `equipCosmetic`. Skin frames are built per skin id in
+  `assets.ts` (`a.heroes['glint_frost']`, icons `skin_<id>`); recolours and the Spectral pass are in `heroSkins.ts`.
+  Any new cosmetic needs an achievement that grants it (a test checks this).
 - Held for later (don't build unless asked): daily seeded run, play-by-seed codes, build codes, share card, clips.
 
 ## Gotchas

@@ -1,5 +1,46 @@
 # Changelog
 
+## Phase 2 — unlocks, achievements, cosmetics, difficulty
+
+**What changed**
+
+- **Weapon unlocks:** only the 7 starter weapons (plus your hero's own) appear in level-ups, chests and the Salvage
+  shop at first. The other 12 unlock in the **Armory** for 40–120 Star Shards, or for free from a named achievement.
+  The **Codex** has a new Weapons tab with locked ones greyed out and how to get them.
+- **Difficulty tiers** on every chapter: Story (relaxed, ×0.6 shards), Normal, Veteran (×1.6, elites ×3) and
+  Nightmare (×2.5, elites everywhere, and main bosses add a telegraphed barrage with one gap to step through). Clearing
+  a tier opens the next for that chapter; medals on the chapter cards show your best. Chapters you cleared before this
+  update count as Normal clears.
+- **Endless / Overtime challenge:** a starting Threat (1 / 10 / 20 / 30) and five curses (elites everywhere, no
+  healing pickups, bosses twice as often, enemies faster, no rerolls), each adding a Star Shard bonus (up to +200%).
+  The raised Threat is reached over the first two minutes, because starting cold at Threat 30 killed the bot in
+  12 seconds. Records are kept separately per setup. Active tier and curses show as tags on the HUD and the results
+  screen. Overtime uses the challenge set on the Story screen ("Overtime: …" button) and keeps the chapter's tier.
+- **49 achievements** with pixel badges, an Achievements screen with progress bars, and a pop-up when one lands
+  (mid-run too). Each pays out a cosmetic, a weapon unlock or Star Shards. Your existing progress counts: on the
+  first visit to the menu, everything you've already done pops.
+- **Cosmetics + Collection screen**, all earned by achievements: per-hero skins (Emberforged — Witchfire for Pyre —,
+  Frostbound, and the translucent Spectral special; Sprout now works on any hero), weapon trail colours, kill-burst
+  styles, damage-number styles, title banners shown on the results screen, and menu backgrounds. Every hero has their
+  own loadout; skins can also be picked on the hero picker.
+- Bot: `--tier`, `--threat`, `--curses`.
+
+**Checks:** tsc, eslint, 147 tests, single-file build, and bot runs (the four standard ones plus Veteran and Story
+tier Chapter 1, Nightmare boss with Glint, Endless at Threat 10/20/30 with curses, Overtime on Veteran with curses)
+all pass with no page errors; sim cost stays under 0.6 ms/frame. The bot cleared Chapter 1 on Story (343 s) and on
+Veteran (405 s) on seed 777.
+
+**What to try**
+
+1. Story screen: switch tiers on Chapter I, look at the medals, and set an Overtime challenge with the "Overtime"
+   button. Try a Veteran clear, then check that Nightmare opened.
+2. Endless: pick Threat 10 and a curse or two, note the shard bonus line, and watch the HUD tags and the results.
+3. Menu → Achievements: your existing progress should already have popped some. Menu → Collection: equip a skin,
+   trail, kill burst and number style on one hero, play a minute, and check the results banner.
+4. Armory: buy a weapon and see it start turning up in level-ups (the Codex Weapons tab shows what is locked).
+5. With "Unlock everything" off, a new save only offers starter weapons, so tell me if early runs feel too samey.
+   Starter list: `STARTER_WEAPON_IDS` in `src/data/weapons.ts`.
+
 ## Phase 1 — the five heroes
 
 **What changed**
