@@ -7,8 +7,10 @@ import type { Application } from 'pixi.js';
 import { audio } from '../audio/audio';
 import { easeOutCubic, formatTime } from '../core/math';
 import { seedToCode } from '../core/rng';
-import { DEFAULT_KEYS, isEndlessUnlocked, resetSave, save, skinUnlocked, type Action } from '../core/save';
-import { CHARACTERS, CHARACTER_IDS, SKINS } from '../data/characters';
+import { DEFAULT_KEYS, isEndlessUnlocked, resetSave, save, type Action } from '../core/save';
+import { CHARACTERS, CHARACTER_IDS } from '../data/characters';
+import { COSMETICS, COSMETIC_BY_ID, COSMETIC_KINDS, NUMBER_STYLES, cosmeticsFor, type CosmeticDef, type CosmeticKind } from '../data/cosmetics';
+import { ACHIEVEMENTS, achievementProgress, rewardText, sourceOf, type AchievementDef } from '../systems/achievements';
 import { BOSSES, ENEMIES, MINIBOSSES } from '../data/enemies';
 import { MAPS, MAP_ORDER, type StoryCard } from '../data/maps';
 import { PASSIVES, RELICS } from '../data/passives';
@@ -24,7 +26,7 @@ import { allEvolutionRecipes } from '../systems/build';
 import { describeOffer, type Offer } from '../systems/offers';
 import { ARMORY, CACHE_TIERS, branchesFor, armoryCost, cacheTierWeights, availablePoints, buyArmory, canRankUp, isNodeUnlocked, masteryXpToNext, rankUp, refundAll, spentPoints, type Branch } from '../systems/mastery';
 import type { ShopItem } from '../systems/shop';
-import { getMastery, heroUnlockStats, isHeroUnlocked, metaBonusFor, syncHeroUnlocks, treeFor, weaponPoolFor } from '../core/meta';
+import { achContext, achievementsDone, cosmeticUnlocked, equipCosmetic, getMastery, heroUnlockStats, isHeroUnlocked, loadoutFor, menuScene, metaBonusFor, syncAchievements, syncHeroUnlocks, treeFor, weaponPoolFor } from '../core/meta';
 import { LOCKED_WEAPON_IDS, WEAPON_UNLOCKS, buyWeapon } from '../systems/weaponUnlocks';
 import { unlockProgress } from '../systems/heroes';
 import { CURSES, START_THREATS, TIERS, challengeLabel, challengeShardMult, parseChallengeKey, challengeKey, tierUnlocked, type Challenge, type TierId } from '../systems/difficulty';
@@ -76,6 +78,10 @@ export class UI implements GameUI {
   private inputLock = 0;
   private bannerEl: HTMLElement;
   private toastEl: HTMLElement;
+  /** achievement pop-ups, shown one after another */
+  private achEl: HTMLElement;
+  private achQueue: AchievementDef[] = [];
+  private achShowing = false;
   private edgeEl: HTMLElement;
   private multiEl: HTMLElement;
   private multiBest = 0;
@@ -99,8 +105,8 @@ export class UI implements GameUI {
     this.multiEl = h('div', { class: 'multi hidden' });
     root.append(this.screenEl, this.overlayEl, this.modalEl);
     this.overlayEl.append(this.edgeEl, this.bannerEl, this.toastEl, this.multiEl);
-    this.sel.skin = save.data.skins.equipped.warden ?? 'default';
-    if (!skinUnlocked(this.sel.skin)) this.sel.skin = 'default';
+    this.achEl = h('div', { class: 'ach-toasts' });
+    this.overlayEl.append(this.achEl);
     app.renderer.on('resize', (w: number, hgt: number) => this.game?.resize(w, hgt));
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && this.game && this.game.modal === 'none') this.game.setModal('pause');
@@ -183,7 +189,7 @@ export class UI implements GameUI {
     this.destroyGame();
     audio.playMusic('menu');
     const endless = isEndlessUnlocked();
-    const art = storyScene('graveyard_before').toCanvas();
+    const art = storyScene(menuScene()).toCanvas();
     art.className = 'menu-art';
     const el = h(
       'div',
@@ -201,6 +207,8 @@ export class UI implements GameUI {
           this.btn('Story', () => this.showStorySelect(), 'primary', { 'data-autofocus': true }),
           this.btn(endless ? 'Endless' : 'Endless  ·  beat Chapter 1', () => this.showEndlessSelect(), '', endless ? {} : { disabled: true }),
           this.btn(`Armory · ${save.data.meta.shards} shards`, () => this.showArmory()),
+          this.btn('Collection', () => this.showCollection()),
+          this.btn(`Achievements · ${achievementsDone()} / ${ACHIEVEMENTS.length}`, () => this.showAchievements()),
           this.btn('Codex', () => this.showCodex()),
           this.btn('Records', () => this.showRecords()),
           this.btn('Settings', () => this.showSettingsScreen()),
@@ -210,6 +218,7 @@ export class UI implements GameUI {
       ),
     );
     this.showScreen(el, null);
+    for (const a of syncAchievements()) this.achievement(a);
     const fresh = syncHeroUnlocks();
     if (fresh.length) this.celebrateHeroes(fresh);
   }
@@ -271,7 +280,7 @@ export class UI implements GameUI {
                   onChange();
                 },
               },
-              ok ? this.icon(`hero_${this.sel.skin === 'sprout' && selected ? 'sprout' : id}`, 'char-art') : h('div', { class: 'char-art lockart' }, this.icon(`hero_${id}`, 'shadow'), this.icon('i_lock', 'lock')),
+              ok ? this.icon(`skin_${loadoutFor(id).skin}`, 'char-art') : h('div', { class: 'char-art lockart' }, this.icon(`hero_${id}`, 'shadow'), this.icon('i_lock', 'lock')),
               h('div', { class: 'char-name' }, c.name),
               h('div', { class: 'char-title' }, ok ? c.title : c.unlock),
               ok ? null : h('div', { class: 'char-prog' }, h('div', { class: 'cp-bar' }, h('i', { style: `width:${prog.need ? Math.min(100, (prog.have / prog.need) * 100).toFixed(1) : 0}%` })), h('span', null, prog.text)),
@@ -293,41 +302,169 @@ export class UI implements GameUI {
         ),
       );
       // skins
-      const skins = Object.values(SKINS).filter((s) => s.character === '*' || s.character === this.sel.character);
+      const hero = this.sel.character;
+      const worn = loadoutFor(hero).skin;
       wrap.appendChild(
         h(
           'div',
           { class: 'skin-row' },
           h('div', { class: 'pick-label' }, 'Skin'),
-          skins.map((s) => {
-            const ok = skinUnlocked(s.id);
+          cosmeticsFor('skin', hero).map((s) => {
+            const ok = cosmeticUnlocked(s.id);
             return h(
               'button',
               {
-                class: `skin ${this.sel.skin === s.id ? 'sel' : ''} ${ok ? '' : 'locked'}`,
+                class: `skin ${worn === s.id ? 'sel' : ''} ${ok ? '' : 'locked'}`,
                 'data-nav': true,
                 onclick: () => {
-                  if (!ok) {
-                    this.toast(`Hidden skin — ${s.unlock}`, '#8dff6a');
-                    return;
-                  }
+                  if (!ok) return this.toast(`${s.name} — ${this.earnText(s.id)}`, '#8dff6a');
                   audio.play('click');
-                  this.sel.skin = s.id;
-                  save.data.skins.equipped[this.sel.character] = s.id;
-                  save.write();
+                  equipCosmetic(hero, s.id);
                   render();
                   onChange();
                 },
               },
-              ok ? this.icon(s.id === 'sprout' ? 'hero_sprout' : `hero_${this.sel.character}`) : this.icon('i_lock'),
+              ok ? this.icon(`skin_${s.id}`) : this.icon('i_lock'),
               h('span', null, ok ? s.name : '???'),
             );
           }),
+          this.btn('Collection', () => this.showCollection(hero, 'skin', back), 'small'),
         ),
       );
     };
     render();
     return wrap;
+  }
+
+  /** how a cosmetic is earned */
+  private earnText(id: string): string {
+    const a = sourceOf(id);
+    return a ? `earn “${a.name}”: ${a.desc}` : 'Available from the start';
+  }
+
+  achievement(a: AchievementDef): void {
+    this.achQueue.push(a);
+    if (!this.achShowing) this.nextAchievement();
+  }
+
+  private nextAchievement(): void {
+    const a = this.achQueue.shift();
+    if (!a) {
+      this.achShowing = false;
+      return;
+    }
+    this.achShowing = true;
+    audio.play('record', { vol: 0.7 });
+    const reward = rewardText(a.reward, (id) => WEAPONS[id]?.name ?? COSMETIC_BY_ID[id]?.name ?? id);
+    const el = h('div', { class: 'ach-toast', style: `--c:${css(a.color)}` }, this.icon(`ach_${a.id}`), h('div', null, h('span', null, 'ACHIEVEMENT'), h('b', null, a.name), reward ? h('em', null, reward) : null));
+    this.achEl.replaceChildren(el);
+    setTimeout(() => {
+      el.remove();
+      this.nextAchievement();
+    }, 3400);
+  }
+
+  private showAchievements(): void {
+    const c = achContext();
+    const done = save.data.achievements;
+    const names = (id: string) => WEAPONS[id]?.name ?? COSMETIC_BY_ID[id]?.name ?? id;
+    const sorted = [...ACHIEVEMENTS].sort((x, y) => Number(!!done[y.id]) - Number(!!done[x.id]));
+    const grid = h(
+      'div',
+      { class: 'ach-grid' },
+      sorted.map((a) => {
+        const p = achievementProgress(a, c);
+        const got = !!done[a.id];
+        return h(
+          'div',
+          { class: `ach ${got ? 'got' : ''}`, style: `--c:${css(a.color)}` },
+          this.icon(`ach_${a.id}`, 'ach-icon'),
+          h(
+            'div',
+            { class: 'ach-text' },
+            h('b', null, a.name),
+            h('span', null, a.desc),
+            h('div', { class: 'ach-bar' }, h('i', { style: `width:${((p.have / p.need) * 100).toFixed(1)}%` }), h('span', null, got ? 'Done' : `${Math.floor(p.have).toLocaleString('en-US')} / ${p.need.toLocaleString('en-US')}`)),
+            h('em', null, `Reward: ${rewardText(a.reward, names)}`),
+          ),
+        );
+      }),
+    );
+    const el = h(
+      'div',
+      { class: 'screen select' },
+      h('div', { class: 'panel wide tall' }, h('h2', null, 'Achievements'), h('div', { class: 'hint left' }, `${achievementsDone()} of ${ACHIEVEMENTS.length} earned. Every one pays out a cosmetic, a weapon unlock or Star Shards.`), h('div', { class: 'scroll' }, grid), h('div', { class: 'row end' }, this.btn('Back', () => this.showMenu(), 'primary'))),
+    );
+    this.showScreen(el, () => this.showMenu());
+  }
+
+  /** a small picture of what a cosmetic looks like */
+  private cosmeticPreview(c: CosmeticDef): HTMLElement {
+    switch (c.kind) {
+      case 'skin':
+        return h('div', { class: 'cp skin' }, this.icon(`skin_${c.id}`));
+      case 'trail': {
+        const col = c.color ? css(c.color) : 'linear-gradient(90deg, #6ff3ff, #ff8a3d, #c46dff, #7dff8a)';
+        return h('div', { class: 'cp trail', style: `--t:${col}` }, h('i'), h('i'), h('i'));
+      }
+      case 'burst':
+        return h('div', { class: `cp burst ${c.style}` }, Array.from({ length: 7 }, () => h('i')));
+      case 'numbers': {
+        const st = NUMBER_STYLES[c.style ?? 'default'];
+        return h('div', { class: 'cp numbers' }, h('span', { style: `color:${css(st.hit)}` }, '24'), h('span', { class: 'crit', style: `color:${css(st.crit)}` }, '137!'), h('span', { class: 'mega', style: `color:${css(st.mega)}` }, '612!!'));
+      }
+      case 'banner':
+        return h('div', { class: 'cp banner' }, h('span', null, c.id === 'banner_none' ? '—' : c.name), h('b', null, 'VICTORY'));
+      case 'menu': {
+        const cv = storyScene(c.scene ?? 'graveyard_before').toCanvas();
+        cv.className = 'cp-scene';
+        return h('div', { class: 'cp menu' }, cv);
+      }
+    }
+  }
+
+  private showCollection(hero = this.sel.character, kind: CosmeticKind = 'skin', back: () => void = () => this.showMenu()): void {
+    if (!isHeroUnlocked(hero)) hero = 'warden';
+    const info = COSMETIC_KINDS.find((k) => k.kind === kind)!;
+    const lo = loadoutFor(hero);
+    const equipped = (c: CosmeticDef) => (c.kind === 'menu' ? menuScene() === c.scene : lo[c.kind as Exclude<CosmeticKind, 'menu'>] === c.id);
+    const items = kind === 'skin' ? cosmeticsFor('skin', hero) : COSMETICS.filter((c) => c.kind === kind);
+    const owned = COSMETICS.filter((c) => cosmeticUnlocked(c.id)).length;
+    const tabs = h('div', { class: 'tabs' }, COSMETIC_KINDS.map((k) => this.btn(k.name, () => this.showCollection(hero, k.kind, back), k.kind === kind ? 'tab sel' : 'tab')));
+    const heroes = info.perHero
+      ? h('div', { class: 'col-heroes' }, h('span', { class: 'pick-label' }, 'Loadout for'), CHARACTER_IDS.filter(isHeroUnlocked).map((id) => h('button', { class: `col-hero ${id === hero ? 'sel' : ''}`, 'data-nav': true, style: `--c:${css(CHARACTERS[id].glow)}`, onclick: () => this.showCollection(id, kind, back) }, this.icon(`skin_${loadoutFor(id).skin}`), h('span', null, CHARACTERS[id].name))))
+      : h('div', { class: 'hint left' }, 'The menu background is shared by every hero.');
+    const grid = h(
+      'div',
+      { class: 'col-grid' },
+      items.map((c) => {
+        const ok = cosmeticUnlocked(c.id);
+        const on = ok && equipped(c);
+        return h(
+          'button',
+          {
+            class: `col-card ${ok ? '' : 'locked'} ${on ? 'on' : ''}`,
+            'data-nav': true,
+            onclick: () => {
+              if (!ok) return this.toast(`${c.name}: ${this.earnText(c.id)}`, '#ffc94d');
+              audio.play('click');
+              equipCosmetic(hero, c.id);
+              this.showCollection(hero, kind, back);
+            },
+          },
+          this.cosmeticPreview(c),
+          h('b', null, c.name),
+          h('span', null, ok ? c.desc : this.earnText(c.id)),
+          h('em', null, on ? 'EQUIPPED' : ok ? 'Equip' : 'LOCKED'),
+        );
+      }),
+    );
+    const el = h(
+      'div',
+      { class: 'screen select' },
+      h('div', { class: 'panel wide tall' }, h('h2', null, 'Collection'), h('div', { class: 'hint left' }, `${owned} of ${COSMETICS.length} cosmetics earned. All of them come from achievements — nothing is for sale.`), tabs, heroes, h('div', { class: 'scroll' }, grid), h('div', { class: 'row end' }, this.btn('Back', back, 'primary'))),
+    );
+    this.showScreen(el, back);
   }
 
   private showStorySelect(): void {
@@ -619,7 +756,8 @@ export class UI implements GameUI {
   /** how a locked weapon is earned, for the Armory and Codex */
   private weaponEarnText(id: string): string {
     const u = WEAPON_UNLOCKS[id];
-    return u ? `Unlock: ${u.shards} Star Shards in the Armory.` : '';
+    const a = sourceOf(id);
+    return u ? `Unlock: ${u.shards} Star Shards in the Armory${a ? `, or free with the achievement “${a.name}”` : ''}.` : '';
   }
 
   private showCodex(tab: 'weapons' | 'enemies' | 'bosses' | 'evolutions' = 'weapons'): void {
@@ -732,7 +870,7 @@ export class UI implements GameUI {
     this.nav.layer = null;
     this.lastOpts = opts;
     this.clearedBefore = save.data.progress.chaptersCleared;
-    const g = new Game(this.app, this.a, this.input, this, { ...opts, meta: metaBonusFor(opts.character), weaponPool: weaponPoolFor(opts.character) });
+    const g = new Game(this.app, this.a, this.input, this, { ...opts, meta: metaBonusFor(opts.character), weaponPool: weaponPoolFor(opts.character), loadout: loadoutFor(opts.character), skin: loadoutFor(opts.character).skin });
     this.game = g;
     this.app.stage.addChild(g.root);
     this.hud = new Hud(this.a, () => g.modal === 'none' && g.setModal('pause'), () => this.input.press('spell'));
@@ -1264,7 +1402,7 @@ export class UI implements GameUI {
             'div',
             { class: `arm weapon ${has ? 'maxed' : 'locked'}` },
             this.icon(`w_${id}`, 'arm-icon'),
-            h('div', { class: 'arm-text' }, h('b', null, w.name), h('span', null, w.desc)),
+            h('div', { class: 'arm-text' }, h('b', null, w.name), h('span', null, has ? w.desc : `${w.desc} ${sourceOf(id) ? `Free with “${sourceOf(id)!.name}”.` : ''}`)),
             this.btn(has ? 'Unlocked' : `${u.shards} shards`, () => {
               const next = buyWeapon(owned, save.data.meta.shards, id);
               if (next === null) {
@@ -1410,7 +1548,7 @@ export class UI implements GameUI {
       h(
         'div',
         { class: 'panel wide tall' },
-        h('div', { class: 'res-head' }, h('div', { class: 'res-title' }, title), h('div', { class: 'res-sub' }, sub), r.tags.length ? h('div', { class: 'res-tags' }, r.tags.map((t) => h('span', null, t))) : null, r.newRecord ? h('div', { class: 'res-record' }, 'NEW RECORD!') : null, firstClear ? h('div', { class: 'res-record green' }, 'CHAPTER CLEARED') : null, ...heroNotes),
+        h('div', { class: 'res-head' }, COSMETIC_BY_ID[r.banner] && r.banner !== 'banner_none' ? h('div', { class: 'res-banner' }, COSMETIC_BY_ID[r.banner].name) : null, h('div', { class: 'res-title' }, title), h('div', { class: 'res-sub' }, sub), r.tags.length ? h('div', { class: 'res-tags' }, r.tags.map((t) => h('span', null, t))) : null, r.newRecord ? h('div', { class: 'res-record' }, 'NEW RECORD!') : null, firstClear ? h('div', { class: 'res-record green' }, 'CHAPTER CLEARED') : null, ...heroNotes),
         h(
           'div',
           { class: 'scroll' },

@@ -8,7 +8,11 @@ import { BIG_SPRITES, BOSS_DRAW, ENEMY_DRAW, ENEMY_FRAMES } from './enemyArt';
 import { bell, candles, cathedralFloor, glassShard, pew, pillar } from './cathedralArt';
 import { blackSunFloor, crystalSpire, floatingRock, starEmber } from './blackSunArt';
 import * as fx from './fxArt';
-import { HERO_BODIES, HERO_PALETTES, drawHeroFrames, type HeroBody } from './heroArt';
+import { HERO_BODIES, HERO_PALETTES, drawHeroFrames, type HeroBody, type HeroFrames } from './heroArt';
+import { skinPalette, spectral } from './heroSkins';
+import { achievementIcon } from './achIcons';
+import { COSMETICS } from '../data/cosmetics';
+import { ACHIEVEMENTS } from '../systems/achievements';
 import { buildIcons } from './icons';
 import { debris, girder, graveyardFloor, lamp, wreck } from './mapArt';
 import type { Pix } from './pixel';
@@ -34,7 +38,8 @@ export interface Assets {
   pxSource: TextureSource;
   softSource: TextureSource;
   floor: Record<string, Texture>;
-  heroes: Record<HeroBody, HeroTextures>;
+  /** keyed by skin id (e.g. 'warden_default', 'glint_frost', 'sprout') */
+  heroes: Record<string, HeroTextures>;
   enemy: Record<string, Texture[]>;
   enemyFlash: Record<string, Texture>;
   enemyShape: Record<string, [number, number, number][]>;
@@ -180,7 +185,20 @@ export function buildAssets(): Assets {
   const pxItems: Record<string, Pix> = {};
 
   // heroes
-  const heroFrames = Object.fromEntries(HERO_BODIES.map((b) => [b, drawHeroFrames({ body: b, palette: HERO_PALETTES[b] })])) as Record<HeroBody, ReturnType<typeof drawHeroFrames>>;
+  const bodyFrames = Object.fromEntries(HERO_BODIES.map((b) => [b, drawHeroFrames({ body: b, palette: HERO_PALETTES[b] })])) as Record<HeroBody, HeroFrames>;
+  // every skin cosmetic gets its own frames, keyed by skin id
+  const heroFrames: Record<string, HeroFrames> = {};
+  for (const c of COSMETICS) {
+    if (c.kind !== 'skin') continue;
+    if (c.skin === 'sprout') heroFrames[c.id] = bodyFrames.sprout;
+    else {
+      const body = c.hero as HeroBody;
+      if (c.skin === 'spectral') {
+        const f = bodyFrames[body];
+        heroFrames[c.id] = { idle: f.idle.map(spectral), run: f.run.map(spectral), victory: spectral(f.victory) };
+      } else heroFrames[c.id] = c.skin === 'default' ? bodyFrames[body] : drawHeroFrames({ body, palette: skinPalette(HERO_PALETTES[body], c.skin ?? 'default', body === 'pyre') });
+    }
+  }
   for (const [body, f] of Object.entries(heroFrames)) {
     f.idle.forEach((p, i) => (pxItems[`${body}_idle${i}`] = p));
     f.run.forEach((p, i) => (pxItems[`${body}_run${i}`] = p));
@@ -284,8 +302,8 @@ export function buildAssets(): Assets {
     return new Texture({ source: src });
   };
 
-  const heroes = {} as Record<HeroBody, HeroTextures>;
-  for (const body of Object.keys(heroFrames) as HeroBody[]) {
+  const heroes: Record<string, HeroTextures> = {};
+  for (const body of Object.keys(heroFrames)) {
     const f = heroFrames[body];
     heroes[body] = {
       idle: f.idle.map((_, i) => px.frames[`${body}_idle${i}`]),
@@ -307,7 +325,9 @@ export function buildAssets(): Assets {
   const icons: Record<string, string> = {};
   for (const [k, p] of Object.entries(iconPix)) icons[k] = p.toDataURL();
   // hero portraits for menus
-  for (const b of HERO_BODIES) icons[`hero_${b}`] = heroFrames[b].idle[0].toDataURL();
+  for (const b of HERO_BODIES) icons[`hero_${b}`] = bodyFrames[b].idle[0].toDataURL();
+  for (const [id, f] of Object.entries(heroFrames)) icons[`skin_${id}`] = f.idle[0].toDataURL();
+  for (const a of ACHIEVEMENTS) icons[`ach_${a.id}`] = achievementIcon(a.icon, a.color).toDataURL();
   for (const id of Object.keys(ENEMY_DRAW)) icons[`enemy_${id}`] = pxItems[`e_${id}_0`].toDataURL();
   for (const id of Object.keys(BOSS_DRAW)) icons[`enemy_${id}`] = pxItems[`boss_${id}_0`].toDataURL();
   icons.i_salvage = pxItems.salvage0.toDataURL();

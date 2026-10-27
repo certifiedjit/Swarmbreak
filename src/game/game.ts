@@ -21,13 +21,14 @@ import { buildStats, eligibleEvolutions, newBuild, type Build } from '../systems
 import { beatsRecord, endlessParams, milestonesBetween, type Milestone } from '../systems/endless';
 import { applyOffer, upgradePool, chestPrice, newChestState, rollChestItem, rollChestRarity, rollLevelUpOffers, rollRarity, type ChestState, type Offer, type OfferResult } from '../systems/offers';
 import { RoundFlow, type FlowEvent } from '../systems/roundFlow';
-import { addMasteryXp, emptyBonus, rollCacheShards, runMasteryXp, shardsForRun, type MetaBonus } from '../systems/mastery';
+import { CACHE_TIERS, addMasteryXp, emptyBonus, rollCacheShards, runMasteryXp, shardsForRun, type MetaBonus } from '../systems/mastery';
 import type { ShopItem } from '../systems/shop';
-import { getMastery } from '../core/meta';
+import { getMastery, syncAchievements, type RunOverlay } from '../core/meta';
+import { COSMETIC_BY_ID, NUMBER_STYLES, defaultLoadout, type Loadout } from '../data/cosmetics';
+import type { AchievementDef } from '../systems/achievements';
 import { isFillerOnly, xpToNext } from '../systems/xp';
 import { chestCostMult, freeRerollsPerLevel, spellCooldownMult } from '../systems/heroes';
 import { CURSES, NO_CHALLENGE, THREAT_RAMP, challengeKey, recordTierClear, runMods, threatStartTime, tierDef, type Challenge, type RunMods, type TierId } from '../systems/difficulty';
-import type { HeroBody } from '../render/heroArt';
 import { spawnMainBoss, spawnMiniboss, updateBosses } from './bosses';
 import { damageEnemy, killEnemy, spawnDirector, spawnEliteWave, updateEnemies, updateChains, cleanupEnemies, clearAllEnemies } from './enemies';
 import { Fx } from './fx';
@@ -85,6 +86,8 @@ export interface RunResult {
   overtimeBosses: number;
   /** tier and curses that applied (see Game.difficultyTags) */
   tags: string[];
+  /** the equipped title banner (a cosmetic id) */
+  banner: string;
 }
 
 /** permanent progress awarded at the end of a run */
@@ -123,6 +126,8 @@ export interface GameUI {
   shop(items: ShopItem[]): void;
   /** multi-kill callout, e.g. "×14 CLEAVE" */
   multi(n: number, label: string): void;
+  /** an achievement just unlocked */
+  achievement(a: AchievementDef): void;
 }
 
 export interface GameOptions {
@@ -139,6 +144,8 @@ export interface GameOptions {
   tier?: TierId;
   /** Endless: starting Threat + curses. Story: what Overtime will use. */
   challenge?: Challenge;
+  /** the hero's cosmetics */
+  loadout?: Loadout;
 }
 
 export class Game {
@@ -191,6 +198,16 @@ export class Game {
   mods: RunMods;
   /** Endless starts its clock here so the HUD opens at the chosen Threat */
   private endlessOffset = 0;
+  readonly loadout: Loadout;
+  /** weapon trail / slash colour override (0 = each weapon's own) */
+  private trailOverride = 0;
+  /** kill-burst style */
+  readonly burstStyle: string;
+  /** for achievements: took hazard damage this run, dashed during the current chapter boss */
+  hazardHit = false;
+  private dashedInBoss = false;
+  private clearBanked = false;
+  private achT = 1;
   readonly pickups: Pickups;
   readonly hazards: Hazards;
   readonly objects: WorldObjects;
@@ -324,6 +341,9 @@ export class Game {
     this.challenge = opts.challenge ?? NO_CHALLENGE;
     this.mods = runMods(this.tier, opts.mode === 'endless' ? this.challenge : undefined);
     if (opts.mode === 'endless') this.endlessOffset = threatStartTime(this.challenge.threat);
+    this.loadout = opts.loadout ?? defaultLoadout(opts.character);
+    this.trailOverride = COSMETIC_BY_ID[this.loadout.trail]?.color ?? 0;
+    this.burstStyle = COSMETIC_BY_ID[this.loadout.burst]?.style ?? 'default';
     const meta = opts.meta ?? emptyBonus();
     this.metaMods = meta.mods;
     this.rerolls += meta.rerolls;
@@ -349,6 +369,7 @@ export class Game {
     this.fx = new Fx(assets);
     this.fx.setReduced(this.reduced);
     this.fx.numbersOn = save.data.settings.damageNumbers;
+    this.fx.numberStyle = NUMBER_STYLES[COSMETIC_BY_ID[this.loadout.numbers]?.style ?? 'default'] ?? NUMBER_STYLES.default;
     this.hash = new SpatialHash(this.map.width, this.map.height, 48, 16384, 8192);
 
     this.world.addChild(
@@ -404,7 +425,12 @@ export class Game {
 
   // ------------------------------------------------------------------ setup
   heroTex() {
-    return this.a.heroes[this.opts.skin === 'sprout' ? 'sprout' : (this.opts.character as HeroBody)] ?? this.a.heroes.warden;
+    return this.a.heroes[this.opts.skin] ?? this.a.heroes[`${this.opts.character}_default`] ?? this.a.heroes.warden_default;
+  }
+
+  /** a weapon effect's colour, or the equipped trail colour */
+  trailColor(c: number): number {
+    return this.trailOverride || c;
   }
 
   private buildDecor(): void {
@@ -563,6 +589,11 @@ export class Game {
     updateChains(this, dt);
     cleanupEnemies(this);
     this.updateStreak(dt);
+    this.achT -= dt;
+    if (this.achT <= 0) {
+      this.achT = 1;
+      this.checkAchievements();
+    }
     // dps samples every 5s
     this.dpsT += dt;
     if (this.dpsT >= 5) {
@@ -663,11 +694,9 @@ export class Game {
     this.victoryT = -1;
     this.nearbyChestT = 20;
     // the clear counts now, whatever happens next
-    const sd = save.data;
-    sd.progress.chaptersCleared = Math.max(sd.progress.chaptersCleared, this.map.chapter);
-    sd.progress.tiers[this.map.id] = recordTierClear(sd.progress.tiers[this.map.id], this.tier);
-    if (!sd.skins.unlocked.includes('sprout')) sd.skins.unlocked.push('sprout');
+    this.bankClear();
     save.write();
+    this.checkAchievements();
     audio.playMusic(this.map.music);
     audio.setIntensity(0.7);
     this.ui.banner('OVERTIME', 'The swarm returns — a great boss every few minutes', '#ff4d9a');
@@ -716,12 +745,42 @@ export class Game {
           audio.play('miniIntro', { vol: 0.5 });
           break;
         case 'spawnBoss':
+          this.dashedInBoss = false;
           spawnMainBoss(this, this.map.boss, 1, true);
           break;
         case 'victory':
           break;
       }
     }
+  }
+
+  /** this run's progress on top of the save, so achievements can pop mid-run */
+  private runOverlay(): RunOverlay {
+    const endless = this.opts.mode === 'endless' ? this.time : 0;
+    return {
+      kills: this.modal === 'ended' ? 0 : this.stats_.kills,
+      maxStreak: this.stats_.maxStreak,
+      endless,
+      overtime: this.overtimeAt >= 0 ? this.time - this.overtimeAt : 0,
+      threat30: this.challenge.threat >= 30 ? endless : 0,
+      allCurses: this.challenge.curses.length >= 5 ? endless : 0,
+    };
+  }
+
+  checkAchievements(): void {
+    for (const a of syncAchievements(this.runOverlay())) this.ui.achievement(a);
+  }
+
+  /** a chapter clear is banked once (at Overtime or at the end), with its tier and achievement stats */
+  private bankClear(): void {
+    if (this.clearBanked) return;
+    this.clearBanked = true;
+    const sd = save.data;
+    sd.progress.chaptersCleared = Math.max(sd.progress.chaptersCleared, this.map.chapter);
+    sd.progress.tiers[this.map.id] = recordTierClear(sd.progress.tiers[this.map.id], this.tier);
+    sd.progress.heroTiers[this.opts.character] = recordTierClear(sd.progress.heroTiers[this.opts.character], this.tier);
+    if (!this.hazardHit) sd.stats.hazardFreeClears++;
+    if (this.tier === 'story') sd.stats.storyTierClears++;
   }
 
   /** a kill happened: kill meter, streak, frenzy */
@@ -829,6 +888,7 @@ export class Game {
     const s = this.stats;
     switch (def.kind) {
       case 'dash': {
+        if (this.bossActive?.boss?.isMain && !this.bossActive.dead) this.dashedInBoss = true;
         let dx = this.input.move.x, dy = this.input.move.y;
         if (Math.hypot(dx, dy) < 0.1) {
           dx = Math.cos(this.faceAng);
@@ -1295,6 +1355,7 @@ export class Game {
     const base = 8 * ch * k;
     const roll = rollCacheShards(this.lootRng.next(), base, this.stats.luck);
     const r = { coins: (100 + 60 * ch) * k, shards: roll.shards, base, tier: roll.tier, masteryXp: 250 * ch * k, first };
+    if (roll.tier === CACHE_TIERS.length - 1) save.data.stats.jackpots++;
     this.victoryBonus = { shards: r.shards, masteryXp: r.masteryXp, coins: r.coins };
     this.addCoins(r.coins);
     audio.play('chestOpen');
@@ -1363,6 +1424,8 @@ export class Game {
     const b = e.boss!;
     this.stats_.bossTimes.push({ name: b.isMain ? b.name : b.name, time: this.time - b.spawnedAt });
     save.data.stats.bossesKilled++;
+    if (b.isMain && this.flow && this.build.spell === 'aegis_dash' && !this.dashedInBoss) save.data.stats.noDashBossKills++;
+    if (b.isMain && this.overtimeAt >= 0) save.data.stats.overtimeBossKills++;
     if (this.bossActive === e) this.bossActive = null;
     if (b.isMain && this.flow) {
       this.handleFlow(this.flow.onBossDefeated());
@@ -1408,6 +1471,7 @@ export class Game {
 
   /** many kills from one swing / wave / blast: hit-stop, burst and a callout */
   multiKill(n: number, label: string): void {
+    if (n > save.data.stats.bestMulti) save.data.stats.bestMulti = n;
     if (n < 6) return;
     const big = n >= 15;
     this.hitStop(big ? 0.06 : 0.035);
@@ -1446,10 +1510,11 @@ export class Game {
       }
     }
     if (won && this.opts.mode === 'story') {
-      sd.progress.chaptersCleared = Math.max(sd.progress.chaptersCleared, this.map.chapter);
-      sd.progress.tiers[this.map.id] = recordTierClear(sd.progress.tiers[this.map.id], this.tier);
-      if (this.map.chapter >= 1 && !sd.skins.unlocked.includes('sprout')) sd.skins.unlocked.push('sprout');
+      this.bankClear();
     }
+    if (this.overtimeAt >= 0) sd.stats.longestOvertime = Math.max(sd.stats.longestOvertime, this.time - this.overtimeAt);
+    if (this.opts.mode === 'endless' && this.challenge.threat >= 30) sd.stats.longestThreat30 = Math.max(sd.stats.longestThreat30, this.time);
+    if (this.opts.mode === 'endless' && this.challenge.curses.length >= 5) sd.stats.longestAllCurses = Math.max(sd.stats.longestAllCurses, this.time);
     // permanent progress: mastery XP for this hero, and Star Shards from leftover coins
     const storyWin = won && this.opts.mode === 'story';
     const mastery = getMastery(this.opts.character);
@@ -1466,11 +1531,12 @@ export class Game {
     sd.history.unshift({ mode: this.opts.mode, map: this.map.id, character: this.opts.character, won, time: this.time, kills: this.stats_.kills, level: this.level, date: Date.now() });
     sd.history = sd.history.slice(0, 20);
     save.write();
+    this.checkAchievements();
     if (won) {
       this.playerSprite.texture = this.heroTex().victory;
       audio.playMusic('victory');
     }
-    this.ui.end({ mode: this.opts.mode, map: this.map.id, character: this.opts.character, won, time: this.time, level: this.level, stats: this.stats_, newRecord, seed: this.seed, build: this.build, progress, overtime: this.overtimeAt >= 0 ? this.time - this.overtimeAt : 0, overtimeBosses: this.overtimeBosses, tags: this.difficultyTags() });
+    this.ui.end({ mode: this.opts.mode, map: this.map.id, character: this.opts.character, won, time: this.time, level: this.level, stats: this.stats_, newRecord, seed: this.seed, build: this.build, progress, overtime: this.overtimeAt >= 0 ? this.time - this.overtimeAt : 0, overtimeBosses: this.overtimeBosses, tags: this.difficultyTags(), banner: this.loadout.banner });
   }
 
   quit(): void {

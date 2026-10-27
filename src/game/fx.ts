@@ -6,6 +6,7 @@
 import type { Texture } from 'pixi.js';
 import type { Assets } from '../render/assets';
 import { PLayer, type PP } from './layers';
+import { NUMBER_STYLES } from '../data/cosmetics';
 
 export type FxLayerName = 'soft' | 'px' | 'pxNormal';
 
@@ -71,6 +72,8 @@ export class Fx {
   maxBudget = 2400;
   reduced = false;
   numbersOn = true;
+  /** damage number colours (a cosmetic) */
+  numberStyle = NUMBER_STYLES.default;
   maxNumbers = 70;
 
   constructor(a: Assets) {
@@ -208,6 +211,10 @@ export class Fx {
     if (!this.numbersOn) return;
     if (this.nums.length >= this.maxNumbers && !crit) return;
     if (this.nums.length >= this.maxNumbers + 20 && !mega) return;
+    const st = this.numberStyle;
+    if (color === NUMBER_STYLES.default.hit) color = st.hit;
+    else if (color === NUMBER_STYLES.default.crit) color = st.crit;
+    else if (color === NUMBER_STYLES.default.mega) color = st.mega;
     const text = String(Math.max(1, Math.round(value)));
     const scale = mega ? 2.5 : crit ? 1.8 : value >= 100 ? 1.3 : 1.1;
     const parts: PP[] = [];

@@ -1,4 +1,5 @@
 import type { MasteryState } from '../systems/mastery';
+import type { Loadout } from '../data/cosmetics';
 
 /**
  * Persistent save in localStorage. Every access is wrapped in try/catch
@@ -45,9 +46,38 @@ export interface RunSummary {
 export interface SaveData {
   version: 1;
   settings: Settings;
-  progress: { chaptersCleared: number; /** best difficulty tier index cleared per chapter map (-1 / missing = none) */ tiers: Record<string, number> };
+  progress: {
+    chaptersCleared: number;
+    /** best difficulty tier index cleared per chapter map (missing = none) */
+    tiers: Record<string, number>;
+    /** best difficulty tier index cleared with each hero */
+    heroTiers: Record<string, number>;
+  };
   bests: Record<string, Record<string, BestRecord>>;
-  stats: { totalKills: number; chestsOpened: number; runs: number; bossesKilled: number; playTime: number; bestStreak: number; longestEndless: number };
+  stats: {
+    totalKills: number;
+    chestsOpened: number;
+    runs: number;
+    bossesKilled: number;
+    playTime: number;
+    bestStreak: number;
+    longestEndless: number;
+    /** biggest single multi-kill */
+    bestMulti: number;
+    longestOvertime: number;
+    overtimeBossKills: number;
+    jackpots: number;
+    hazardFreeClears: number;
+    noDashBossKills: number;
+    storyTierClears: number;
+    /** longest Endless run started at Threat 30, and with all five curses */
+    longestThreat30: number;
+    longestAllCurses: number;
+  };
+  /** achievement id -> when it was earned */
+  achievements: Record<string, number>;
+  /** earned cosmetics, each hero's loadout, and the menu background */
+  cosmetics: { unlocked: string[]; loadout: Record<string, Partial<Loadout>>; menu: string };
   /** heroes unlocked by their condition (the unlock banner has been shown) */
   heroes: { unlocked: string[] };
   codex: { evolutions: string[]; enemies: string[] };
@@ -63,9 +93,11 @@ export function defaultSave(): SaveData {
   return {
     version: 1,
     settings: { music: 0.6, sfx: 0.8, effects: 'full', damageNumbers: true, showFps: false, keys: structuredClone(DEFAULT_KEYS), unlockAll: false },
-    progress: { chaptersCleared: 0, tiers: {} },
+    progress: { chaptersCleared: 0, tiers: {}, heroTiers: {} },
     bests: {},
-    stats: { totalKills: 0, chestsOpened: 0, runs: 0, bossesKilled: 0, playTime: 0, bestStreak: 0, longestEndless: 0 },
+    stats: { totalKills: 0, chestsOpened: 0, runs: 0, bossesKilled: 0, playTime: 0, bestStreak: 0, longestEndless: 0, bestMulti: 0, longestOvertime: 0, overtimeBossKills: 0, jackpots: 0, hazardFreeClears: 0, noDashBossKills: 0, storyTierClears: 0, longestThreat30: 0, longestAllCurses: 0 },
+    achievements: {},
+    cosmetics: { unlocked: [], loadout: {}, menu: 'menu_graveyard' },
     heroes: { unlocked: [] },
     codex: { evolutions: [], enemies: [] },
     skins: { unlocked: ['default'], equipped: {} },
@@ -96,6 +128,10 @@ export function upgradeSave(d: SaveData): SaveData {
   }
   if (!Array.isArray(d.heroes.unlocked)) d.heroes.unlocked = [];
   if (!Array.isArray(d.meta.weapons)) d.meta.weapons = [];
+  if (!Array.isArray(d.cosmetics.unlocked)) d.cosmetics.unlocked = [];
+  // the old skin list: Sprout moves into cosmetics, and so does any hero wearing it
+  if (d.skins?.unlocked?.includes('sprout') && !d.cosmetics.unlocked.includes('sprout')) d.cosmetics.unlocked.push('sprout');
+  for (const [hero, skin] of Object.entries(d.skins?.equipped ?? {})) if (skin === 'sprout') (d.cosmetics.loadout[hero] ??= {}).skin = 'sprout';
   // tiers arrived with difficulty: a chapter cleared before then counts as cleared on Normal
   for (const [i, id] of ['graveyard', 'cathedral', 'black_sun'].entries()) if (d.progress.chaptersCleared > i && d.progress.tiers[id] === undefined) d.progress.tiers[id] = 1;
   return d;
@@ -134,6 +170,4 @@ export function isEndlessUnlocked(): boolean {
   return save.data.settings.unlockAll || save.data.progress.chaptersCleared >= 1;
 }
 
-export function skinUnlocked(id: string): boolean {
-  return save.data.settings.unlockAll || save.data.skins.unlocked.includes(id);
-}
+

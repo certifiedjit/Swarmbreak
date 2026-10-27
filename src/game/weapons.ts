@@ -241,7 +241,7 @@ export class Weapons {
     const g = this.g;
     const half = evolved ? 1.65 : 1.3;
     const x = g.px, y = g.py;
-    g.fx.spawn('soft', g.a.soft.slash, x, y, { rot: ang, s0: (R / 58) * 0.8, s1: (R / 58) * 1.08, life: 0.17, alpha: 1, tint: w.def.color, force: true, scaleY: evolved ? 1.35 : 1 });
+    g.fx.spawn('soft', g.a.soft.slash, x, y, { rot: ang, s0: (R / 58) * 0.8, s1: (R / 58) * 1.08, life: 0.17, alpha: 1, tint: g.trailColor(w.def.color), force: true, scaleY: evolved ? 1.35 : 1 });
     g.fx.spawn('soft', g.a.soft.slash, x, y, { rot: ang, s0: (R / 58) * 0.7, s1: (R / 58) * 0.95, life: 0.12, alpha: 0.7, tint: 0xffffff, force: true });
     audio.play('swing', { pitch: evolved ? 0.8 : 1 });
     g.hash.query(x, y, R + 30, ids);
@@ -284,7 +284,7 @@ export class Weapons {
       b.rotation = a + Math.PI / 2;
       b.scaleX = b.scaleY = 1.1 * Math.sqrt(e.area);
       b.tint = w.def.color;
-      if (!g.reduced || k % 2 === 0) g.fx.spawn('soft', g.a.soft.glow, bx, by, { s0: 0.28, s1: 0.1, life: 0.16, alpha: 0.45, tint: w.def.color });
+      if (!g.reduced || k % 2 === 0) g.fx.spawn('soft', g.a.soft.glow, bx, by, { s0: 0.28, s1: 0.1, life: 0.16, alpha: 0.45, tint: g.trailColor(w.def.color) });
       g.hash.query(bx, by, br + 20, ids);
       for (const i of ids) {
         const en = g.enemies[i];
@@ -562,7 +562,7 @@ export class Weapons {
     p.trailT -= dt;
     if (p.trailT <= 0) {
       p.trailT = p.evolved ? 0.09 : 0.05;
-      g.fx.spawn('soft', g.a.soft.glow, p.x, p.y, { s0: p.r / 40, s1: 0.05, life: 0.25, alpha: 0.5, tint: p.color });
+      g.fx.spawn('soft', g.a.soft.glow, p.x, p.y, { s0: p.r / 40, s1: 0.05, life: 0.25, alpha: 0.5, tint: g.trailColor(p.color) });
       if (p.evolved) {
         g.zones.push({ x: p.x, y: p.y, r: 13 * (p.r / 9), life: 1.3, tick: 0, dmg: p.dmg * 0.25, weapon: p.weapon, color: p.color });
         g.fx.spawn('soft', g.a.soft.glow, p.x, p.y, { s0: p.r / 22, s1: p.r / 30, life: 1.3, alpha: 0.35, tint: 0xff7a2a });
@@ -609,7 +609,7 @@ export class Weapons {
     p.trailT -= dt;
     if (p.trailT <= 0) {
       p.trailT = 0.03;
-      g.fx.spawn('px', g.a.px.px, p.x - p.vx * 0.02, p.y - p.vy * 0.02, { life: 0.3, tint: p.color, s0: 1.2, s1: 0.3, vx: -p.vx * 0.1, vy: -p.vy * 0.1 });
+      g.fx.spawn('px', g.a.px.px, p.x - p.vx * 0.02, p.y - p.vy * 0.02, { life: 0.3, tint: g.trailColor(p.color), s0: 1.2, s1: 0.3, vx: -p.vx * 0.1, vy: -p.vy * 0.1 });
     }
     let hit = false;
     this.hitAlong(p, () => {

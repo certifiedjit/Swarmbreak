@@ -136,15 +136,3 @@ export const CHARACTERS: Record<string, CharacterDef> = {
 };
 
 export const CHARACTER_IDS = Object.keys(CHARACTERS);
-
-export interface SkinDef {
-  id: string;
-  name: string;
-  character: string | '*';
-  unlock: string;
-}
-
-export const SKINS: Record<string, SkinDef> = {
-  default: { id: 'default', name: 'Void-Forged', character: '*', unlock: 'Default' },
-  sprout: { id: 'sprout', name: 'Sprout', character: '*', unlock: 'Beat Chapter 1' },
-};

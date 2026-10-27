@@ -563,15 +563,43 @@ export function damageEnemy(g: Game, e: Enemy, amount: number, src: string, o: D
   return dmg;
 }
 
+const CONFETTI = [0xff4d6d, 0xffc94d, 0x7dff8a, 0x59f3ff, 0xc46dff];
+
+/** a normal enemy's death puff, in the equipped kill-burst style */
+function killBurst(g: Game, e: Enemy): void {
+  const fx = g.fx;
+  switch (g.burstStyle) {
+    case 'sparks':
+      fx.glow(e.x, e.y, 0xfff3c0, e.r * 3, 0.14, 0.5);
+      fx.sparks(e.x, e.y, 0xffffff, g.reduced ? 2 : 5, 170, 0.22);
+      break;
+    case 'void':
+      fx.glow(e.x, e.y, 0xa060ff, e.r * 3.5, 0.2, 0.6);
+      fx.ring(e.x, e.y, e.r * 2.4, 2, 0xc890ff, 0.22, 0.7);
+      fx.embers(e.x, e.y, 0xc890ff, g.reduced ? 2 : 4, 40, 0.5);
+      break;
+    case 'confetti':
+      fx.glow(e.x, e.y, e.color, e.r * 2.5, 0.14, 0.4);
+      for (let k = 0; k < (g.reduced ? 3 : 6); k++) fx.spawn('px', g.a.px.px, e.x, e.y, { vx: (Math.random() - 0.5) * 160, vy: -40 - Math.random() * 90, life: 0.55, tint: CONFETTI[k % CONFETTI.length], s0: 1.6, s1: 1 });
+      break;
+    case 'pixels':
+      fx.glow(e.x, e.y, e.color, e.r * 2.5, 0.14, 0.4);
+      fx.dissolve(e.x, e.y, g.a.enemyShape[e.sprite], e.color, e.facing, e.scale, g.reduced ? 8 : 18, 0.55);
+      break;
+    default:
+      fx.glow(e.x, e.y, e.color, e.r * 3.5, 0.18, 0.55);
+      fx.embers(e.x, e.y, e.color, 5, 70, 0.5);
+      if (Math.random() < 0.35) fx.dissolve(e.x, e.y, g.a.enemyShape[e.sprite], e.color, e.facing, e.scale, 14, 0.5);
+  }
+}
+
 export function killEnemy(g: Game, e: Enemy, _src: string): void {
   if (e.dead) return;
   e.dead = true;
   flushNumber(g, e);
   const fx = g.fx;
   if (e.kind === 'normal') {
-    fx.glow(e.x, e.y, e.color, e.r * 3.5, 0.18, 0.55);
-    fx.embers(e.x, e.y, e.color, 5, 70, 0.5);
-    if (Math.random() < 0.35) fx.dissolve(e.x, e.y, g.a.enemyShape[e.sprite], e.color, e.facing, e.scale, 14, 0.5);
+    killBurst(g, e);
     // the kill sound climbs with your streak
     audio.play('kill', { pitch: 1 + Math.min(g.streak, 80) / 110 });
   } else if (e.kind === 'elite') {

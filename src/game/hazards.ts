@@ -258,7 +258,7 @@ export class Hazards {
   private applyDamage(h: Hazard): void {
     const g = this.g;
     const scale = g.flow ? 1 + 0.15 * (g.flow.round - 1) : 1 + g.time / 600;
-    if (PLAYER_DMG[h.kind] && this.inside(h, g.px, g.py, 4)) g.hurt(PLAYER_DMG[h.kind] * scale * (1 + 0.25 * (g.map.chapter - 1)), null);
+    if (PLAYER_DMG[h.kind] && this.inside(h, g.px, g.py, 4) && g.hurt(PLAYER_DMG[h.kind] * scale * (1 + 0.25 * (g.map.chapter - 1)), null)) g.hazardHit = true;
     const mx = (h.x + h.x2) / 2, my = (h.y + h.y2) / 2;
     const R = h.kind === 'powerline' ? Math.hypot(h.x2 - h.x, h.y2 - h.y) / 2 + 20 : h.r + 20;
     g.hash.query(mx, my, R, ids);
