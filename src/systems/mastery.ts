@@ -14,6 +14,8 @@ export interface RunPerks {
   banishes?: number;
   skips?: number;
   startCoins?: number;
+  /** strengthens the hero's signature passive (see src/systems/heroes.ts) */
+  passive?: number;
 }
 
 export interface SkillNode {
@@ -54,7 +56,112 @@ export const SKILL_TREES: Record<string, SkillNode[]> = {
     N({ id: 'prospector', name: 'Prospector', branch: 'salvage', desc: '+40 starting coins, +5% Coin Gain', maxRank: 3, cost: 1, requires: { id: 'scholar', rank: 1 }, perRank: { mods: [{ stat: 'coinGain', add: 0.05 }], perks: { startCoins: 40 } } }),
     N({ id: 'gambler', name: 'Gambler', branch: 'salvage', desc: '+1 reroll and +1 banish per run', maxRank: 2, cost: 2, requires: { id: 'prospector', rank: 2 }, perRank: { perks: { rerolls: 1, banishes: 1 } } }),
   ],
+
+  glint: [
+    N({ id: 'light_frame', name: 'Light Frame', branch: 'bulwark', desc: '+10 Max HP', maxRank: 5, cost: 1, perRank: { mods: [{ stat: 'maxHp', add: 10 }] } }),
+    N({ id: 'sidestep', name: 'Sidestep', branch: 'bulwark', desc: '+2% Dodge', maxRank: 3, cost: 1, requires: { id: 'light_frame', rank: 2 }, perRank: { mods: [{ stat: 'dodge', add: 0.02 }] } }),
+    N({ id: 'slipstream', name: 'Slipstream', branch: 'bulwark', desc: '+4% Move Speed', maxRank: 3, cost: 1, requires: { id: 'sidestep', rank: 1 }, perRank: { mods: [{ stat: 'moveSpeed', add: 0.04 }] } }),
+    N({ id: 'blur', name: 'Blur', branch: 'bulwark', desc: '+1 Revive per run', maxRank: 1, cost: 3, requires: { id: 'slipstream', rank: 2 }, perRank: { mods: [{ stat: 'revives', add: 1 }] } }),
+
+    N({ id: 'honed_plasma', name: 'Honed Plasma', branch: 'oath', desc: '+5% Damage', maxRank: 5, cost: 1, perRank: { mods: [{ stat: 'damage', add: 0.05 }] } }),
+    N({ id: 'quick_draw', name: 'Quick Draw', branch: 'oath', desc: '+5% Attack Speed', maxRank: 3, cost: 1, requires: { id: 'honed_plasma', rank: 2 }, perRank: { mods: [{ stat: 'attackSpeed', add: 0.05 }] } }),
+    N({ id: 'pressure_points', name: 'Pressure Points', branch: 'oath', desc: '+3% Crit Chance', maxRank: 3, cost: 1, requires: { id: 'quick_draw', rank: 1 }, perRank: { mods: [{ stat: 'critChance', add: 0.03 }] } }),
+    N({ id: 'third_eye', name: 'Third Eye', branch: 'oath', desc: 'Afterimage: guaranteed crits deal +25% damage', maxRank: 2, cost: 2, requires: { id: 'pressure_points', rank: 2 }, perRank: { perks: { passive: 1 } } }),
+
+    N({ id: 'long_reach', name: 'Long Reach', branch: 'salvage', desc: '+15 Pickup Range', maxRank: 3, cost: 1, perRank: { mods: [{ stat: 'pickupRange', add: 15 }] } }),
+    N({ id: 'quick_study', name: 'Quick Study', branch: 'salvage', desc: '+5% XP Gain', maxRank: 3, cost: 1, requires: { id: 'long_reach', rank: 1 }, perRank: { mods: [{ stat: 'xpGain', add: 0.05 }] } }),
+    N({ id: 'pickpocket', name: 'Pickpocket', branch: 'salvage', desc: '+40 starting coins, +5% Coin Gain', maxRank: 3, cost: 1, requires: { id: 'quick_study', rank: 1 }, perRank: { mods: [{ stat: 'coinGain', add: 0.05 }], perks: { startCoins: 40 } } }),
+    N({ id: 'second_look', name: 'Second Look', branch: 'salvage', desc: '+1 reroll and +1 banish per run', maxRank: 2, cost: 2, requires: { id: 'pickpocket', rank: 2 }, perRank: { perks: { rerolls: 1, banishes: 1 } } }),
+  ],
+
+  voidcaller: [
+    N({ id: 'shroud', name: 'Shroud', branch: 'bulwark', desc: '+10 Max HP', maxRank: 5, cost: 1, perRank: { mods: [{ stat: 'maxHp', add: 10 }] } }),
+    N({ id: 'ward_sigils', name: 'Ward Sigils', branch: 'bulwark', desc: '+0.3 HP Regen', maxRank: 3, cost: 1, requires: { id: 'shroud', rank: 2 }, perRank: { mods: [{ stat: 'regen', add: 0.3 }] } }),
+    N({ id: 'soul_ward', name: 'Soul Ward', branch: 'bulwark', desc: '+1 Armour', maxRank: 3, cost: 1, requires: { id: 'ward_sigils', rank: 1 }, perRank: { mods: [{ stat: 'armor', add: 1 }] } }),
+    N({ id: 'undying_bond', name: 'Undying Bond', branch: 'bulwark', desc: '+1 Revive per run', maxRank: 1, cost: 3, requires: { id: 'soul_ward', rank: 2 }, perRank: { mods: [{ stat: 'revives', add: 1 }] } }),
+
+    N({ id: 'hunger', name: 'Hunger', branch: 'oath', desc: '+5% Damage', maxRank: 5, cost: 1, perRank: { mods: [{ stat: 'damage', add: 0.05 }] } }),
+    N({ id: 'lingering_bond', name: 'Lingering Bond', branch: 'oath', desc: '+8% Duration', maxRank: 3, cost: 1, requires: { id: 'hunger', rank: 2 }, perRank: { mods: [{ stat: 'duration', add: 0.08 }] } }),
+    N({ id: 'wide_call', name: 'Wide Call', branch: 'oath', desc: '+5% Area', maxRank: 3, cost: 1, requires: { id: 'lingering_bond', rank: 1 }, perRank: { mods: [{ stat: 'area', add: 0.05 }] } }),
+    N({ id: 'grave_calling', name: 'Grave Calling', branch: 'oath', desc: 'Binding: +2% chance to raise a spirit', maxRank: 2, cost: 2, requires: { id: 'wide_call', rank: 2 }, perRank: { perks: { passive: 1 } } }),
+
+    N({ id: 'soul_tether', name: 'Soul Tether', branch: 'salvage', desc: '+15 Pickup Range', maxRank: 3, cost: 1, perRank: { mods: [{ stat: 'pickupRange', add: 15 }] } }),
+    N({ id: 'forbidden_lore', name: 'Forbidden Lore', branch: 'salvage', desc: '+5% XP Gain', maxRank: 3, cost: 1, requires: { id: 'soul_tether', rank: 1 }, perRank: { mods: [{ stat: 'xpGain', add: 0.05 }] } }),
+    N({ id: 'grave_goods', name: 'Grave Goods', branch: 'salvage', desc: '+40 starting coins, +5% Coin Gain', maxRank: 3, cost: 1, requires: { id: 'forbidden_lore', rank: 1 }, perRank: { mods: [{ stat: 'coinGain', add: 0.05 }], perks: { startCoins: 40 } } }),
+    N({ id: 'omens', name: 'Omens', branch: 'salvage', desc: '+1 reroll and +1 banish per run', maxRank: 2, cost: 2, requires: { id: 'grave_goods', rank: 2 }, perRank: { perks: { rerolls: 1, banishes: 1 } } }),
+  ],
+
+  riven: [
+    N({ id: 'hardhat', name: 'Hardhat', branch: 'bulwark', desc: '+12 Max HP', maxRank: 5, cost: 1, perRank: { mods: [{ stat: 'maxHp', add: 12 }] } }),
+    N({ id: 'reinforced', name: 'Reinforced', branch: 'bulwark', desc: '+1 Armour', maxRank: 3, cost: 1, requires: { id: 'hardhat', rank: 2 }, perRank: { mods: [{ stat: 'armor', add: 1 }] } }),
+    N({ id: 'field_repair', name: 'Field Repair', branch: 'bulwark', desc: '+0.3 HP Regen', maxRank: 3, cost: 1, requires: { id: 'reinforced', rank: 1 }, perRank: { mods: [{ stat: 'regen', add: 0.3 }] } }),
+    N({ id: 'failsafe', name: 'Failsafe', branch: 'bulwark', desc: '+1 Revive per run', maxRank: 1, cost: 3, requires: { id: 'field_repair', rank: 2 }, perRank: { mods: [{ stat: 'revives', add: 1 }] } }),
+
+    N({ id: 'calibrated', name: 'Calibrated', branch: 'oath', desc: '+5% Damage', maxRank: 5, cost: 1, perRank: { mods: [{ stat: 'damage', add: 0.05 }] } }),
+    N({ id: 'overclock', name: 'Overclock', branch: 'oath', desc: '+5% Attack Speed', maxRank: 3, cost: 1, requires: { id: 'calibrated', rank: 2 }, perRank: { mods: [{ stat: 'attackSpeed', add: 0.05 }] } }),
+    N({ id: 'long_fuse', name: 'Long Fuse', branch: 'oath', desc: '+8% Duration', maxRank: 3, cost: 1, requires: { id: 'overclock', rank: 1 }, perRank: { mods: [{ stat: 'duration', add: 0.08 }] } }),
+    N({ id: 'rapid_deploy', name: 'Rapid Deploy', branch: 'oath', desc: 'Overbuilt: deploy 0.3 s sooner, +1 field turret', maxRank: 2, cost: 2, requires: { id: 'long_fuse', rank: 2 }, perRank: { perks: { passive: 1 } } }),
+
+    N({ id: 'magnet_coil', name: 'Magnet Coil', branch: 'salvage', desc: '+15 Pickup Range', maxRank: 3, cost: 1, perRank: { mods: [{ stat: 'pickupRange', add: 15 }] } }),
+    N({ id: 'schematics', name: 'Schematics', branch: 'salvage', desc: '+5% XP Gain', maxRank: 3, cost: 1, requires: { id: 'magnet_coil', rank: 1 }, perRank: { mods: [{ stat: 'xpGain', add: 0.05 }] } }),
+    N({ id: 'salvage_rights', name: 'Salvage Rights', branch: 'salvage', desc: '+40 starting coins, +5% Coin Gain', maxRank: 3, cost: 1, requires: { id: 'schematics', rank: 1 }, perRank: { mods: [{ stat: 'coinGain', add: 0.05 }], perks: { startCoins: 40 } } }),
+    N({ id: 'spare_parts', name: 'Spare Parts', branch: 'salvage', desc: '+1 reroll and +1 banish per run', maxRank: 2, cost: 2, requires: { id: 'salvage_rights', rank: 2 }, perRank: { perks: { rerolls: 1, banishes: 1 } } }),
+  ],
+
+  fortune: [
+    N({ id: 'lucky_charm', name: 'Lucky Charm', branch: 'bulwark', desc: '+10 Max HP', maxRank: 5, cost: 1, perRank: { mods: [{ stat: 'maxHp', add: 10 }] } }),
+    N({ id: 'near_miss', name: 'Near Miss', branch: 'bulwark', desc: '+2% Dodge', maxRank: 3, cost: 1, requires: { id: 'lucky_charm', rank: 2 }, perRank: { mods: [{ stat: 'dodge', add: 0.02 }] } }),
+    N({ id: 'rabbits_foot', name: 'Rabbit’s Foot', branch: 'bulwark', desc: '+0.3 HP Regen', maxRank: 3, cost: 1, requires: { id: 'near_miss', rank: 1 }, perRank: { mods: [{ stat: 'regen', add: 0.3 }] } }),
+    N({ id: 'cheat_death', name: 'Cheat Death', branch: 'bulwark', desc: '+1 Revive per run', maxRank: 1, cost: 3, requires: { id: 'rabbits_foot', rank: 2 }, perRank: { mods: [{ stat: 'revives', add: 1 }] } }),
+
+    N({ id: 'loaded', name: 'Loaded', branch: 'oath', desc: '+5% Damage', maxRank: 5, cost: 1, perRank: { mods: [{ stat: 'damage', add: 0.05 }] } }),
+    N({ id: 'sleight', name: 'Sleight of Hand', branch: 'oath', desc: '+5% Attack Speed', maxRank: 3, cost: 1, requires: { id: 'loaded', rank: 2 }, perRank: { mods: [{ stat: 'attackSpeed', add: 0.05 }] } }),
+    N({ id: 'marked_cards', name: 'Marked Cards', branch: 'oath', desc: '+3% Crit Chance', maxRank: 3, cost: 1, requires: { id: 'sleight', rank: 1 }, perRank: { mods: [{ stat: 'critChance', add: 0.03 }] } }),
+    N({ id: 'jackpot', name: 'Jackpot', branch: 'oath', desc: 'Loaded Dice: +5% chance a coin bursts', maxRank: 2, cost: 2, requires: { id: 'marked_cards', rank: 2 }, perRank: { perks: { passive: 1 } } }),
+
+    N({ id: 'lucky_streak', name: 'Lucky Streak', branch: 'salvage', desc: '+8% Luck', maxRank: 3, cost: 1, perRank: { mods: [{ stat: 'luck', add: 0.08 }] } }),
+    N({ id: 'golden_touch', name: 'Golden Touch', branch: 'salvage', desc: '+40 starting coins, +5% Coin Gain', maxRank: 3, cost: 1, requires: { id: 'lucky_streak', rank: 1 }, perRank: { mods: [{ stat: 'coinGain', add: 0.05 }], perks: { startCoins: 40 } } }),
+    N({ id: 'card_counter', name: 'Card Counter', branch: 'salvage', desc: '+5% XP Gain', maxRank: 3, cost: 1, requires: { id: 'golden_touch', rank: 1 }, perRank: { mods: [{ stat: 'xpGain', add: 0.05 }] } }),
+    N({ id: 'house_edge', name: 'House Edge', branch: 'salvage', desc: '+1 reroll and +1 banish per run', maxRank: 2, cost: 2, requires: { id: 'card_counter', rank: 2 }, perRank: { perks: { rerolls: 1, banishes: 1 } } }),
+  ],
+
+  pyre: [
+    N({ id: 'smoulder', name: 'Smoulder', branch: 'bulwark', desc: '+10 Max HP', maxRank: 5, cost: 1, perRank: { mods: [{ stat: 'maxHp', add: 10 }] } }),
+    N({ id: 'heat_shield', name: 'Heat Shield', branch: 'bulwark', desc: '+1 Armour', maxRank: 3, cost: 1, requires: { id: 'smoulder', rank: 2 }, perRank: { mods: [{ stat: 'armor', add: 1 }] } }),
+    N({ id: 'cinder_blood', name: 'Cinder Blood', branch: 'bulwark', desc: '+0.4 HP Regen', maxRank: 3, cost: 1, requires: { id: 'heat_shield', rank: 1 }, perRank: { mods: [{ stat: 'regen', add: 0.4 }] } }),
+    N({ id: 'rekindle', name: 'Rekindle', branch: 'bulwark', desc: '+1 Revive per run', maxRank: 1, cost: 3, requires: { id: 'cinder_blood', rank: 2 }, perRank: { mods: [{ stat: 'revives', add: 1 }] } }),
+
+    N({ id: 'stoke', name: 'Stoke', branch: 'oath', desc: '+5% Damage', maxRank: 5, cost: 1, perRank: { mods: [{ stat: 'damage', add: 0.05 }] } }),
+    N({ id: 'spread', name: 'Spread', branch: 'oath', desc: '+5% Area', maxRank: 3, cost: 1, requires: { id: 'stoke', rank: 2 }, perRank: { mods: [{ stat: 'area', add: 0.05 }] } }),
+    N({ id: 'flashpoint', name: 'Flashpoint', branch: 'oath', desc: '+3% Crit Chance', maxRank: 3, cost: 1, requires: { id: 'spread', rank: 1 }, perRank: { mods: [{ stat: 'critChance', add: 0.03 }] } }),
+    N({ id: 'wildfire', name: 'Wildfire', branch: 'oath', desc: 'Kindling: burning trail deals +30% damage', maxRank: 2, cost: 2, requires: { id: 'flashpoint', rank: 2 }, perRank: { perks: { passive: 1 } } }),
+
+    N({ id: 'updraft', name: 'Updraft', branch: 'salvage', desc: '+15 Pickup Range', maxRank: 3, cost: 1, perRank: { mods: [{ stat: 'pickupRange', add: 15 }] } }),
+    N({ id: 'ash_lore', name: 'Ash Lore', branch: 'salvage', desc: '+5% XP Gain', maxRank: 3, cost: 1, requires: { id: 'updraft', rank: 1 }, perRank: { mods: [{ stat: 'xpGain', add: 0.05 }] } }),
+    N({ id: 'molten_gold', name: 'Molten Gold', branch: 'salvage', desc: '+40 starting coins, +5% Coin Gain', maxRank: 3, cost: 1, requires: { id: 'ash_lore', rank: 1 }, perRank: { mods: [{ stat: 'coinGain', add: 0.05 }], perks: { startCoins: 40 } } }),
+    N({ id: 'fire_sight', name: 'Fire Sight', branch: 'salvage', desc: '+1 reroll and +1 banish per run', maxRank: 2, cost: 2, requires: { id: 'molten_gold', rank: 2 }, perRank: { perks: { rerolls: 1, banishes: 1 } } }),
+  ],
 };
+
+export interface BranchInfo {
+  name: string;
+  desc: string;
+  color: string;
+}
+
+/** each hero names their three branches; the roles stay defence / offence / utility */
+export const TREE_BRANCHES: Record<string, Record<Branch, BranchInfo>> = {
+  warden: BRANCHES,
+  glint: { bulwark: { name: 'Evasion', desc: 'Defence', color: '#ff9be6' }, oath: { name: 'Edge', desc: 'Offence', color: '#ff4dd2' }, salvage: { name: 'Scavenge', desc: 'Utility', color: '#ffc94d' } },
+  voidcaller: { bulwark: { name: 'Veil', desc: 'Defence', color: '#8f9bff' }, oath: { name: 'Pact', desc: 'Offence', color: '#b36bff' }, salvage: { name: 'Rites', desc: 'Utility', color: '#ffc94d' } },
+  riven: { bulwark: { name: 'Plating', desc: 'Defence', color: '#9aa3b8' }, oath: { name: 'Ordnance', desc: 'Offence', color: '#ffd34d' }, salvage: { name: 'Workshop', desc: 'Utility', color: '#7dff8a' } },
+  fortune: { bulwark: { name: 'Charm', desc: 'Defence', color: '#7dff8a' }, oath: { name: 'Hustle', desc: 'Offence', color: '#ff7a5c' }, salvage: { name: 'Fortune', desc: 'Utility', color: '#ffb330' } },
+  pyre: { bulwark: { name: 'Ember', desc: 'Defence', color: '#ffb36b' }, oath: { name: 'Blaze', desc: 'Offence', color: '#ff6a2a' }, salvage: { name: 'Ash', desc: 'Utility', color: '#c3ccd6' } },
+};
+
+export function branchesFor(character: string): Record<Branch, BranchInfo> {
+  return TREE_BRANCHES[character] ?? BRANCHES;
+}
 
 export interface MasteryState {
   /** XP into the current level */
@@ -134,10 +241,12 @@ export interface MetaBonus {
   startCoins: number;
   /** multiplier on chest and shop prices */
   priceMult: number;
+  /** signature passive power */
+  passive: number;
 }
 
 export function emptyBonus(): MetaBonus {
-  return { mods: [], rerolls: 0, banishes: 0, skips: 0, startCoins: 0, priceMult: 1 };
+  return { mods: [], rerolls: 0, banishes: 0, skips: 0, startCoins: 0, priceMult: 1, passive: 0 };
 }
 
 function addPerks(b: MetaBonus, p: RunPerks | undefined, times: number): void {
@@ -146,6 +255,7 @@ function addPerks(b: MetaBonus, p: RunPerks | undefined, times: number): void {
   b.banishes += (p.banishes ?? 0) * times;
   b.skips += (p.skips ?? 0) * times;
   b.startCoins += (p.startCoins ?? 0) * times;
+  b.passive += (p.passive ?? 0) * times;
 }
 
 /** everything a hero's spent skill points give them in a run */

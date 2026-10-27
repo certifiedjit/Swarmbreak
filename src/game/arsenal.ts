@@ -14,6 +14,10 @@ import type { Game } from './game';
 import type { PP } from './layers';
 import type { Enemy, Projectile } from './types';
 import type { EffStats, Weapons, WState } from './weapons';
+import { WEAPONS, type WeaponDef } from '../data/weapons';
+
+/** source id for Riven's Overbuilt turrets (shown as such in the results) */
+export const FIELD_TURRET = 'field_turret';
 
 interface Beam {
   id: string;
@@ -85,12 +89,11 @@ export class Arsenal {
     return this.w.g;
   }
 
-  /** hero passives that boost summons (Voidcaller) and turrets (Riven) */
+  /** Voidcaller's Binding: summons last longer and multiply */
   private summonBonus(kind: 'spirits' | 'turret'): { amount: number; dur: number } {
     const c = this.g.opts.character;
-    if (c === 'voidcaller' && kind === 'spirits') return { amount: 1, dur: 1.5 };
-    if (c === 'voidcaller' && kind === 'turret') return { amount: 0, dur: 1.5 };
-    if (c === 'riven' && kind === 'turret') return { amount: 1, dur: 1.2 };
+    if (c === 'voidcaller' && kind === 'spirits') return { amount: 1, dur: 1.25 };
+    if (c === 'voidcaller' && kind === 'turret') return { amount: 0, dur: 1.25 };
     return { amount: 0, dur: 1 };
   }
 
@@ -369,6 +372,27 @@ export class Arsenal {
     return true;
   }
 
+  /**
+   * Riven's Overbuilt: a field turret where she stands. It uses her own turret
+   * weapon's stats if she carries one, otherwise a level-1 Sentry Turret's.
+   * Past `max` field turrets, the oldest is replaced.
+   */
+  deployFieldTurret(x: number, y: number, life: number, max: number, def: WeaponDef): void {
+    const g = this.g;
+    const own = g.build.weapons.find((w) => WEAPONS[w.id]?.kind === 'turret');
+    const s = g.stats;
+    const e: EffStats = own
+      ? this.w.eff(own.id)
+      : { dmg: def.base.damage, cd: def.base.cooldown / s.attackSpeed, area: def.base.area * s.area, amount: 1, speed: def.base.speed, dur: def.base.duration * s.duration, pierce: def.base.pierce, knock: def.base.knockback, chain: def.base.chain };
+    const field = this.turrets.filter((t) => t.id === FIELD_TURRET);
+    while (field.length >= max) this.removeTurret(field.shift()!);
+    const p = g.projLayer.acquire(g.a.px.turret, x, y);
+    this.turrets.push({ id: FIELD_TURRET, color: def.color, evolved: false, x, y, life, fireT: 0.25, p, e });
+    g.fx.ring(x, y, 4, 30, def.color, 0.35);
+    g.fx.sparks(x, y, def.color, g.reduced ? 2 : 6, 120, 0.25);
+    audio.play('slam', { pitch: 2, vol: 0.4 });
+  }
+
   private removeTurret(t: Turret): void {
     const i = this.turrets.indexOf(t);
     if (i >= 0) this.turrets.splice(i, 1);
@@ -599,7 +623,7 @@ export class Arsenal {
     });
     if (!hit) return false;
     const en = hit as Enemy;
-    damageEnemy(g, en, p.dmg, p.weapon, { kx: p.vx / 560, ky: p.vy / 560, knock: 30 });
+    damageEnemy(g, en, p.dmg, p.weapon, { kx: p.vx / 560, ky: p.vy / 560, knock: 30, crit: p.crit });
     g.fx.sparks(en.x, en.y, p.color, 3, 160, 0.18);
     if (p.n <= 0) return true;
     p.n--;
@@ -771,7 +795,7 @@ export class Arsenal {
   }
 
   /** also used by the Void Pact spell */
-  summon(id: string, color: number, evolved: boolean, dmg: number, life: number, speed = 1): void {
+  summon(id: string, color: number, evolved: boolean, dmg: number, life: number, speed = 1): Projectile {
     const g = this.g;
     const a = Math.random() * TAU;
     const p = this.w.newProjRaw('spirit', id, color, evolved, g.px + Math.cos(a) * 14, g.py + Math.sin(a) * 14, 'spirit0');
@@ -783,6 +807,7 @@ export class Arsenal {
     p.spin = speed;
     p.phase = Math.random() * TAU;
     g.fx.glow(p.x, p.y, color, 30, 0.3, 0.6);
+    return p;
   }
 
   private stepSpirit(p: Projectile, dt: number): boolean {
@@ -869,7 +894,7 @@ export class Arsenal {
     if (Math.random() < 0.5) g.fx.spawn('px', g.a.px.px, p.x, p.y, { life: 0.25, tint: 0xdff8ff, s0: 1, s1: 0.2, vx: -p.vx * 0.05, vy: -p.vy * 0.05 });
     let done = false;
     this.w.hitAlong(p, (en) => {
-      damageEnemy(g, en, p.dmg, p.weapon, { kx: p.vx / 320, ky: p.vy / 320, knock: p.knock });
+      damageEnemy(g, en, p.dmg, p.weapon, { kx: p.vx / 320, ky: p.vy / 320, knock: p.knock, crit: p.crit });
       if (!en.dead && en.kind !== 'boss') {
         en.frozen = Math.max(en.frozen, en.kind === 'normal' ? p.freeze : p.freeze * 0.35);
         g.fx.spawn('px', g.a.px.shard, en.x, en.y, { life: 0.3, tint: 0xdff8ff, s0: 1.5, s1: 0.5 });
@@ -896,7 +921,7 @@ export class Arsenal {
     p.p.y = p.y;
     let hit = false;
     this.w.hitAlong(p, (en) => {
-      damageEnemy(g, en, p.dmg, p.weapon, { kx: p.vx / 430, ky: p.vy / 430, knock: p.knock });
+      damageEnemy(g, en, p.dmg, p.weapon, { kx: p.vx / 430, ky: p.vy / 430, knock: p.knock, crit: p.crit });
       g.fx.sparks(p.x, p.y, p.color, 2, 120, 0.15);
       hit = true;
       return true;

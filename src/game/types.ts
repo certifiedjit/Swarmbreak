@@ -131,6 +131,8 @@ export interface Projectile {
   freeze: number;
   /** spirit: per-hit cooldown */
   cd: number;
+  /** a guaranteed crit (Glint's Afterimage) */
+  crit: boolean;
 }
 
 export interface EnemyBullet {
@@ -188,5 +190,7 @@ export interface Zone {
   pool?: boolean;
   /** heals the player per tick while they stand in it */
   heal?: number;
+  /** drawn as soft burning ground with no rim, so it never reads as a warning (Pyre's trail) */
+  fire?: boolean;
   max?: number;
 }

@@ -128,6 +128,7 @@ export class Pickups {
       }
       case 'coin':
         g.addCoins(p.value);
+        g.passive.onCoin();
         audio.play('coin');
         g.fx.spawn('px', g.a.px.star, g.px + (Math.random() - 0.5) * 10, g.py - 14, { vy: -40, life: 0.4, tint: 0xffc94d, s0: 1, s1: 0.4 });
         break;

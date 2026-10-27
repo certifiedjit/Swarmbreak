@@ -520,11 +520,11 @@ export function damageEnemy(g: Game, e: Enemy, amount: number, src: string, o: D
     if (Math.random() < 0.3) g.fx.sparks(e.x, e.y, 0x6fb8ff, 2, 100, 0.2);
     return 0;
   }
-  let dmg = o.raw ? amount : amount * g.stats.damage;
+  let dmg = o.raw ? amount : amount * g.stats.damage * g.passive.damageMult(e);
   const crit = o.crit === true || (!o.noCrit && g.rng.next() < g.stats.critChance);
   // a crit can "overcrit" into a MEGA crit (25% of your crit chance): another x1.75 on top
   const mega = crit && g.rng.next() < g.stats.critChance * 0.25;
-  if (crit) dmg *= g.stats.critDamage * (mega ? 1.75 : 1);
+  if (crit) dmg *= g.stats.critDamage * (mega ? 1.75 : 1) * (o.crit ? g.passive.forcedCritBonus() : 1);
   dmg *= 0.9 + g.rng.next() * 0.2;
   if (e.armor > 0) dmg = Math.max(dmg * 0.3, dmg - e.armor);
   if (e.boss?.guard !== undefined && e.boss.guard < 1) {

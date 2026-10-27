@@ -47,7 +47,9 @@ export interface SaveData {
   settings: Settings;
   progress: { chaptersCleared: number };
   bests: Record<string, Record<string, BestRecord>>;
-  stats: { totalKills: number; chestsOpened: number; runs: number; bossesKilled: number; playTime: number; bestStreak: number };
+  stats: { totalKills: number; chestsOpened: number; runs: number; bossesKilled: number; playTime: number; bestStreak: number; longestEndless: number };
+  /** heroes unlocked by their condition (the unlock banner has been shown) */
+  heroes: { unlocked: string[] };
   codex: { evolutions: string[]; enemies: string[] };
   skins: { unlocked: string[]; equipped: Record<string, string> };
   history: RunSummary[];
@@ -63,7 +65,8 @@ export function defaultSave(): SaveData {
     settings: { music: 0.6, sfx: 0.8, effects: 'full', damageNumbers: true, showFps: false, keys: structuredClone(DEFAULT_KEYS), unlockAll: false },
     progress: { chaptersCleared: 0 },
     bests: {},
-    stats: { totalKills: 0, chestsOpened: 0, runs: 0, bossesKilled: 0, playTime: 0, bestStreak: 0 },
+    stats: { totalKills: 0, chestsOpened: 0, runs: 0, bossesKilled: 0, playTime: 0, bestStreak: 0, longestEndless: 0 },
+    heroes: { unlocked: [] },
     codex: { evolutions: [], enemies: [] },
     skins: { unlocked: ['default'], equipped: {} },
     history: [],
@@ -83,11 +86,23 @@ function merge<T>(base: T, over: unknown): T {
   return out as T;
 }
 
+/** fill fields an older save could not have recorded */
+export function upgradeSave(d: SaveData): SaveData {
+  // longestEndless arrived with the hero unlocks: recover it from Endless best times
+  if (!d.stats.longestEndless) {
+    let best = 0;
+    for (const byChar of Object.values(d.bests ?? {})) for (const r of Object.values(byChar ?? {})) best = Math.max(best, r?.time ?? 0);
+    d.stats.longestEndless = best;
+  }
+  if (!Array.isArray(d.heroes.unlocked)) d.heroes.unlocked = [];
+  return d;
+}
+
 export function loadSave(): SaveData {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return defaultSave();
-    return merge(defaultSave(), JSON.parse(raw));
+    return upgradeSave(merge(defaultSave(), JSON.parse(raw)));
   } catch {
     return defaultSave();
   }

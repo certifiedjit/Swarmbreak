@@ -24,6 +24,8 @@ import { addMasteryXp, emptyBonus, rollCacheShards, runMasteryXp, shardsForRun, 
 import type { ShopItem } from '../systems/shop';
 import { getMastery } from '../core/meta';
 import { isFillerOnly, xpToNext } from '../systems/xp';
+import { chestCostMult, freeRerollsPerLevel, spellCooldownMult } from '../systems/heroes';
+import type { HeroBody } from '../render/heroArt';
 import { spawnMainBoss, spawnMiniboss, updateBosses } from './bosses';
 import { damageEnemy, killEnemy, spawnDirector, spawnEliteWave, updateEnemies, updateChains, cleanupEnemies, clearAllEnemies } from './enemies';
 import { Fx } from './fx';
@@ -34,6 +36,7 @@ import { WorldObjects } from './objects';
 import { Pickups } from './pickups';
 import type { Enemy, EnemyBullet, Projectile, Telegraph, Zone } from './types';
 import { Weapons } from './weapons';
+import { HeroPassive } from './heroPassive';
 
 export const STEP = 1 / 60;
 
@@ -168,6 +171,8 @@ export class Game {
   // systems
   readonly hash: SpatialHash;
   readonly weapons: Weapons;
+  /** the hero's signature passive */
+  readonly passive: HeroPassive;
   readonly pickups: Pickups;
   readonly hazards: Hazards;
   readonly objects: WorldObjects;
@@ -210,7 +215,7 @@ export class Game {
   private sigil: Sprite;
   private playerGlow: Sprite;
   private animT = 0;
-  private moving = false;
+  moving = false;
   playerDead = false;
   private deathT = 0;
 
@@ -339,6 +344,7 @@ export class Game {
     this.root.addChild(this.world, this.darkness, this.vignette, this.flashGfx);
 
     // systems
+    this.passive = new HeroPassive(this, meta.passive);
     this.weapons = new Weapons(this);
     this.pickups = new Pickups(this);
     this.hazards = new Hazards(this);
@@ -357,7 +363,7 @@ export class Game {
 
   // ------------------------------------------------------------------ setup
   heroTex() {
-    return this.a.heroes[this.opts.skin === 'sprout' ? 'sprout' : 'warden'];
+    return this.a.heroes[this.opts.skin === 'sprout' ? 'sprout' : (this.opts.character as HeroBody)] ?? this.a.heroes.warden;
   }
 
   private buildDecor(): void {
@@ -492,6 +498,7 @@ export class Game {
       return;
     }
     this.updateMode(dt);
+    this.passive.update(dt);
     spawnDirector(this, dt);
     // rebuild spatial hash
     this.hash.clear();
@@ -673,6 +680,7 @@ export class Game {
     const name = e.def?.name ?? (e.boss ? e.boss.name : 'Unknown');
     this.stats_.killsByType[name] = (this.stats_.killsByType[name] ?? 0) + 1;
     if (this.flow && e.countsForMeter) this.handleFlow(this.flow.onKill());
+    this.passive.onKill(e);
     this.streak++;
     this.streakT = 2.5;
     if (this.streak > this.stats_.maxStreak) this.stats_.maxStreak = this.streak;
@@ -760,7 +768,7 @@ export class Game {
   castSpell(): void {
     if (this.spellCd > 0 || this.playerDead) return;
     const def = SPELLS[this.build.spell];
-    this.spellCd = def.cooldown / Math.min(2, this.stats.attackSpeed * 0.5 + 0.5);
+    this.spellCd = (def.cooldown * spellCooldownMult(this.opts.character, def.id)) / Math.min(2, this.stats.attackSpeed * 0.5 + 0.5);
     const s = this.stats;
     switch (def.kind) {
       case 'dash': {
@@ -1053,6 +1061,7 @@ export class Game {
     }
     if (!offers) return;
     this.currentOffers = offers;
+    this.freeRerolls = freeRerollsPerLevel(this.opts.character);
     this.modal = 'levelup';
     audio.play('levelup');
     this.flash(0xffe6a0, 0.25);
@@ -1087,9 +1096,13 @@ export class Game {
     this.afterModal();
   }
 
+  /** free rerolls left on the current level-up (Fortune's Loaded Dice) */
+  freeRerolls = 0;
+
   rerollLevelUp(): Offer[] | null {
-    if (this.rerolls <= 0) return null;
-    this.rerolls--;
+    if (this.freeRerolls > 0) this.freeRerolls--;
+    else if (this.rerolls > 0) this.rerolls--;
+    else return null;
     this.currentOffers = rollLevelUpOffers(this.lootRng, this.build, this.stats.luck);
     return this.currentOffers;
   }
@@ -1126,7 +1139,7 @@ export class Game {
   private nearbyChestT = 75;
 
   chestCost(): number {
-    return chestPrice(this.paidChests, this.priceMult);
+    return chestPrice(this.paidChests, this.priceMult * chestCostMult(this.opts.character));
   }
 
   // ------------------------------------------------------------------ salvage shop
@@ -1366,6 +1379,7 @@ export class Game {
     sd.stats.bestStreak = Math.max(sd.stats.bestStreak, this.stats_.maxStreak);
     let newRecord = false;
     if (this.opts.mode === 'endless') {
+      sd.stats.longestEndless = Math.max(sd.stats.longestEndless, this.time);
       const rec = { time: this.time, kills: this.stats_.kills, date: Date.now() };
       const bests = (sd.bests[this.map.id] ??= {});
       if (beatsRecord(rec, bests[this.opts.character])) {
@@ -1473,8 +1487,15 @@ export class Game {
     g.clear();
     const hw = this.viewW / 2 + 60, hh = this.viewH / 2 + 60;
     for (const z of this.zones) {
-      if (!z.pool || Math.abs(z.x - this.camX) > hw || Math.abs(z.y - this.camY) > hh) continue;
+      if (!(z.pool || z.fire) || Math.abs(z.x - this.camX) > hw || Math.abs(z.y - this.camY) > hh) continue;
       const k = z.max ? Math.min(1, z.life / Math.min(0.5, z.max)) : 1;
+      if (z.fire) {
+        const f = 0.85 + 0.15 * Math.sin(this.time * 17 + z.x * 0.7);
+        g.circle(z.x, z.y, z.r * f).fill({ color: z.color, alpha: 0.13 * k });
+        g.circle(z.x, z.y, z.r * 0.5 * f).fill({ color: 0xffc36b, alpha: 0.12 * k });
+        if (Math.random() < (this.reduced ? 0.04 : 0.14)) this.fx.spawn('px', this.a.px.ember, z.x + (Math.random() - 0.5) * z.r * 1.2, z.y + (Math.random() - 0.5) * z.r, { vy: -34, life: 0.45, tint: Math.random() < 0.5 ? 0xffb36b : z.color, s0: 1.2, s1: 0.2 });
+        continue;
+      }
       const wob = 1 + 0.04 * Math.sin(this.time * 6 + z.x);
       // kept faint so enemies standing in pools stay readable
       g.circle(z.x, z.y, z.r * wob).fill({ color: z.color, alpha: 0.09 * k });

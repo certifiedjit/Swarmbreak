@@ -22,9 +22,11 @@ import type { Assets } from '../render/assets';
 import { storyScene } from '../render/storyArt';
 import { allEvolutionRecipes } from '../systems/build';
 import { describeOffer, type Offer } from '../systems/offers';
-import { ARMORY, BRANCHES, CACHE_TIERS, armoryCost, cacheTierWeights, availablePoints, buyArmory, canRankUp, isNodeUnlocked, masteryXpToNext, rankUp, refundAll, spentPoints, type Branch } from '../systems/mastery';
+import { ARMORY, CACHE_TIERS, branchesFor, armoryCost, cacheTierWeights, availablePoints, buyArmory, canRankUp, isNodeUnlocked, masteryXpToNext, rankUp, refundAll, spentPoints, type Branch } from '../systems/mastery';
 import type { ShopItem } from '../systems/shop';
-import { getMastery, metaBonusFor, treeFor } from '../core/meta';
+import { getMastery, heroUnlockStats, isHeroUnlocked, metaBonusFor, syncHeroUnlocks, treeFor } from '../core/meta';
+import { unlockProgress } from '../systems/heroes';
+import { FIELD_TURRET } from '../game/arsenal';
 import { css, h } from './dom';
 import { Hud } from './hud';
 import { Nav } from './nav';
@@ -39,6 +41,10 @@ const SOURCE_NAMES: Record<string, string> = {
   volatile: 'Chain reactions',
   mortar: 'Enemy mortar fire',
   wave: 'Clearing wave',
+  [FIELD_TURRET]: 'Field turrets (Overbuilt)',
+  pyre_trail: 'Burning trail (Kindling)',
+  coin_burst: 'Coin bursts (Loaded Dice)',
+  raised_spirit: 'Raised spirits (Binding)',
 };
 
 function sourceName(id: string): string {
@@ -202,11 +208,40 @@ export class UI implements GameUI {
       ),
     );
     this.showScreen(el, null);
+    const fresh = syncHeroUnlocks();
+    if (fresh.length) this.celebrateHeroes(fresh);
+  }
+
+  /** the big "new hero" moment, one card per hero */
+  private celebrateHeroes(ids: string[]): void {
+    const [id, ...rest] = ids;
+    const c = CHARACTERS[id];
+    const next = () => {
+      this.closeModal();
+      if (rest.length) this.celebrateHeroes(rest);
+    };
+    audio.play('record');
+    const el = h(
+      'div',
+      { class: 'modal hero-unlock', style: `--c:${css(c.glow)}` },
+      h(
+        'div',
+        { class: 'panel' },
+        h('div', { class: 'hu-kicker' }, 'NEW HERO UNLOCKED'),
+        h('div', { class: 'hu-art' }, this.icon(`hero_${id}`)),
+        h('div', { class: 'hu-name' }, c.name),
+        h('div', { class: 'hu-title' }, c.title),
+        h('div', { class: 'ci-pass' }, h('b', null, c.passiveName + ': '), c.passiveDesc),
+        h('div', { class: 'row center' }, this.btn(rest.length ? 'Next' : 'Nice!', next, 'primary', { 'data-autofocus': true })),
+      ),
+    );
+    this.openModal(el, next, null, 0.6);
   }
 
   private charPicker(onChange: () => void, back: () => void = () => this.showMenu()): HTMLElement {
     const wrap = h('div', { class: 'pick-chars' });
     const render = () => {
+      if (!isHeroUnlocked(this.sel.character)) this.sel.character = 'warden';
       wrap.replaceChildren(
         h('div', { class: 'pick-label' }, 'Hero'),
         h(
@@ -214,7 +249,8 @@ export class UI implements GameUI {
           { class: 'char-row' },
           CHARACTER_IDS.map((id) => {
             const c = CHARACTERS[id];
-            const ok = c.available || false;
+            const ok = isHeroUnlocked(id);
+            const prog = unlockProgress(id, heroUnlockStats());
             const selected = this.sel.character === id;
             const card = h(
               'button',
@@ -224,7 +260,7 @@ export class UI implements GameUI {
                 style: `--c:${css(c.glow)}`,
                 onclick: () => {
                   if (!ok) {
-                    this.toast(`${c.name}: ${c.unlock} (coming in a later update)`, css(c.glow));
+                    this.toast(`${c.name}: ${c.unlock} — ${prog.text}`, css(c.glow));
                     return;
                   }
                   audio.play('click');
@@ -233,9 +269,10 @@ export class UI implements GameUI {
                   onChange();
                 },
               },
-              ok ? this.icon(`hero_${id === 'warden' && this.sel.skin === 'sprout' ? 'sprout' : 'warden'}`, 'char-art') : h('div', { class: 'char-art lockart' }, this.icon('i_lock')),
+              ok ? this.icon(`hero_${this.sel.skin === 'sprout' && selected ? 'sprout' : id}`, 'char-art') : h('div', { class: 'char-art lockart' }, this.icon(`hero_${id}`, 'shadow'), this.icon('i_lock', 'lock')),
               h('div', { class: 'char-name' }, c.name),
               h('div', { class: 'char-title' }, ok ? c.title : c.unlock),
+              ok ? null : h('div', { class: 'char-prog' }, h('div', { class: 'cp-bar' }, h('i', { style: `width:${prog.need ? Math.min(100, (prog.have / prog.need) * 100).toFixed(1) : 0}%` })), h('span', null, prog.text)),
             );
             return card;
           }),
@@ -280,7 +317,7 @@ export class UI implements GameUI {
                   onChange();
                 },
               },
-              ok ? this.icon(s.id === 'sprout' ? 'hero_sprout' : 'hero_warden') : this.icon('i_lock'),
+              ok ? this.icon(s.id === 'sprout' ? 'hero_sprout' : `hero_${this.sel.character}`) : this.icon('i_lock'),
               h('span', null, ok ? s.name : '???'),
             );
           }),
@@ -482,7 +519,7 @@ export class UI implements GameUI {
             'div',
             { class: 'set-group' },
             h('h3', null, 'Testing'),
-            toggle('Unlock everything', () => s.unlockAll, (v) => (s.unlockAll = v), 'Opens Endless and every map you could reach, without clearing Chapter 1'),
+            toggle('Unlock everything', () => s.unlockAll, (v) => (s.unlockAll = v), 'Opens Endless, every map you could reach and every hero, without earning them'),
             h('div', { class: 'row' }, resetBtn),
           ),
       h('div', { class: 'row end' }, this.btn('Back', onBack, 'primary')),
@@ -685,13 +722,13 @@ export class UI implements GameUI {
         h(
           'div',
           { class: 'row center lu-actions' },
-          this.btn(`Reroll (${g.rerolls})`, () => {
+          this.btn(g.freeRerolls > 0 ? `Reroll (free)` : `Reroll (${g.rerolls})`, () => {
             const next = g.rerollLevelUp();
             if (next) {
               render(next);
               this.nav.focusFirst();
             }
-          }, 'small', g.rerolls > 0 ? {} : { disabled: true }),
+          }, g.freeRerolls > 0 ? 'small glow' : 'small', g.rerolls > 0 || g.freeRerolls > 0 ? {} : { disabled: true }),
           this.btn(banish ? 'Cancel banish' : `Banish (${g.banishes})`, () => {
             banish = !banish;
             render(list);
@@ -1051,8 +1088,8 @@ export class UI implements GameUI {
         h('div', { class: `th-pts ${pts > 0 ? 'has' : ''}` }, h('b', null, String(pts)), h('span', null, pts === 1 ? 'point to spend' : 'points to spend')),
       );
       body.replaceChildren(
-        ...(Object.keys(BRANCHES) as Branch[]).map((br) => {
-          const info = BRANCHES[br];
+        ...(Object.keys(branchesFor(character)) as Branch[]).map((br) => {
+          const info = branchesFor(character)[br];
           return h(
             'div',
             { class: 'branch', style: `--c:${info.color}` },
@@ -1226,6 +1263,12 @@ export class UI implements GameUI {
     const poly = pts.map((v, i) => `${pts.length === 1 ? 0 : (i / (pts.length - 1)) * W},${H - (v / maxD) * (H - 6) - 3}`).join(' ');
     const spark = h('div', { class: 'spark', html: `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><polyline points="${poly}" fill="none" stroke="#59f3ff" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>` });
     const kills = Object.entries(s.killsByType).sort((a, b) => b[1] - a[1]).slice(0, 7).map(([n, v]) => h('div', { class: 'rec-row' }, h('span', null, n), h('b', null, String(v))));
+    const fresh = syncHeroUnlocks();
+    if (fresh.length) {
+      audio.play('record');
+      this.banner('NEW HERO UNLOCKED', fresh.map((id) => CHARACTERS[id].name).join(' · '), css(CHARACTERS[fresh[0]].glow));
+    }
+    const heroNotes = fresh.map((id) => h('div', { class: 'res-hero', style: `--c:${css(CHARACTERS[id].glow)}` }, this.icon(`hero_${id}`), h('div', null, h('b', null, `New hero: ${CHARACTERS[id].name}`), h('span', null, `${CHARACTERS[id].title} · ${CHARACTERS[id].passiveName}`))));
     const title = r.mode === 'story' ? (r.won ? 'VICTORY' : 'FALLEN') : 'SURVIVED';
     const sub = r.mode === 'story' ? (r.overtime > 0 ? `${MAPS[r.map].name} · Overtime ${formatTime(r.overtime)} · ${r.overtimeBosses} great boss${r.overtimeBosses === 1 ? '' : 'es'}` : MAPS[r.map].name) : `${formatTime(r.time)} on ${MAPS[r.map].name}`;
     const el = h(
@@ -1234,7 +1277,7 @@ export class UI implements GameUI {
       h(
         'div',
         { class: 'panel wide tall' },
-        h('div', { class: 'res-head' }, h('div', { class: 'res-title' }, title), h('div', { class: 'res-sub' }, sub), r.newRecord ? h('div', { class: 'res-record' }, 'NEW RECORD!') : null, firstClear ? h('div', { class: 'res-record green' }, 'CHAPTER CLEARED') : null),
+        h('div', { class: 'res-head' }, h('div', { class: 'res-title' }, title), h('div', { class: 'res-sub' }, sub), r.newRecord ? h('div', { class: 'res-record' }, 'NEW RECORD!') : null, firstClear ? h('div', { class: 'res-record green' }, 'CHAPTER CLEARED') : null, ...heroNotes),
         h(
           'div',
           { class: 'scroll' },

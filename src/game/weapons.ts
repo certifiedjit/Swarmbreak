@@ -455,6 +455,7 @@ export class Weapons {
     p.n = 0;
     p.freeze = 0;
     p.cd = 0;
+    g.passive.onLaunch(p);
     g.projectiles.push(p);
     return p;
   }
@@ -568,7 +569,7 @@ export class Weapons {
       }
     }
     this.hitAlong(p, (en) => {
-      damageEnemy(g, en, p.dmg, p.weapon, { kx: p.vx / 300, ky: p.vy / 300, knock: p.knock });
+      damageEnemy(g, en, p.dmg, p.weapon, { kx: p.vx / 300, ky: p.vy / 300, knock: p.knock, crit: p.crit });
       return false;
     });
     return false;
@@ -636,7 +637,7 @@ export class Weapons {
       const dx = en.x - p.x, dy = en.y - p.y;
       const d = Math.hypot(dx, dy);
       if (d > R + en.r) continue;
-      damageEnemy(g, en, p.dmg, p.weapon, { kx: dx / (d || 1), ky: dy / (d || 1), knock: p.knock });
+      damageEnemy(g, en, p.dmg, p.weapon, { kx: dx / (d || 1), ky: dy / (d || 1), knock: p.knock, crit: p.crit });
     }
     if (p.evolved && !p.mini) {
       const w = this.list.find((s) => s.id === p.weapon);
