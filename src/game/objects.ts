@@ -215,7 +215,7 @@ export class WorldObjects {
       const dist = Math.hypot(d.x - g.px, d.y - g.py);
       if (dist < 26 && !d.inside) {
         d.inside = true;
-        d.items ??= rollShop(g.lootRng, g.build, g.stats.luck, d.tier, g.priceMult);
+        d.items ??= rollShop(g.lootRng, g.build, g.stats.luck, d.tier, g.priceMult, g.weaponPool);
         g.openShop(d.items);
       } else if (dist > 44) d.inside = false;
     }

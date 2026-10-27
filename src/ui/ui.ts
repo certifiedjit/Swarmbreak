@@ -15,7 +15,7 @@ import { PASSIVES, RELICS } from '../data/passives';
 import { RARITIES, RARITY_INFO, rarityOf } from '../data/rarity';
 import { SPELLS } from '../data/spells';
 import { STAT_KEYS, STAT_LABELS, formatStat } from '../data/stats';
-import { WEAPONS } from '../data/weapons';
+import { ALL_WEAPON_IDS, STARTER_WEAPON_IDS, WEAPONS } from '../data/weapons';
 import { Game, type ChestOpenResult, type GameOptions, type GameUI, type RunResult, type VictoryCacheResult } from '../game/game';
 import { keyLabel, type Input } from '../input/input';
 import type { Assets } from '../render/assets';
@@ -24,7 +24,8 @@ import { allEvolutionRecipes } from '../systems/build';
 import { describeOffer, type Offer } from '../systems/offers';
 import { ARMORY, CACHE_TIERS, branchesFor, armoryCost, cacheTierWeights, availablePoints, buyArmory, canRankUp, isNodeUnlocked, masteryXpToNext, rankUp, refundAll, spentPoints, type Branch } from '../systems/mastery';
 import type { ShopItem } from '../systems/shop';
-import { getMastery, heroUnlockStats, isHeroUnlocked, metaBonusFor, syncHeroUnlocks, treeFor } from '../core/meta';
+import { getMastery, heroUnlockStats, isHeroUnlocked, metaBonusFor, syncHeroUnlocks, treeFor, weaponPoolFor } from '../core/meta';
+import { LOCKED_WEAPON_IDS, WEAPON_UNLOCKS, buyWeapon } from '../systems/weaponUnlocks';
 import { unlockProgress } from '../systems/heroes';
 import { FIELD_TURRET } from '../game/arsenal';
 import { css, h } from './dom';
@@ -532,15 +533,32 @@ export class UI implements GameUI {
   }
 
   // ---------------------------------------------------------------- codex & records
-  private showCodex(tab: 'enemies' | 'bosses' | 'evolutions' = 'enemies'): void {
+  /** how a locked weapon is earned, for the Armory and Codex */
+  private weaponEarnText(id: string): string {
+    const u = WEAPON_UNLOCKS[id];
+    return u ? `Unlock: ${u.shards} Star Shards in the Armory.` : '';
+  }
+
+  private showCodex(tab: 'weapons' | 'enemies' | 'bosses' | 'evolutions' = 'weapons'): void {
     const seen = new Set(save.data.codex.enemies);
     const tabs = h(
       'div',
       { class: 'tabs' },
-      (['enemies', 'bosses', 'evolutions'] as const).map((t) => this.btn(t[0].toUpperCase() + t.slice(1), () => this.showCodex(t), tab === t ? 'tab sel' : 'tab')),
+      (['weapons', 'enemies', 'bosses', 'evolutions'] as const).map((t) => this.btn(t[0].toUpperCase() + t.slice(1), () => this.showCodex(t), tab === t ? 'tab sel' : 'tab')),
     );
     let body: HTMLElement;
-    if (tab === 'enemies') {
+    if (tab === 'weapons') {
+      const pool = new Set(weaponPoolFor(this.sel.character));
+      body = h(
+        'div',
+        { class: 'codex-grid' },
+        ALL_WEAPON_IDS.map((id) => {
+          const w = WEAPONS[id];
+          const open = pool.has(id) || save.data.meta.weapons.includes(id) || STARTER_WEAPON_IDS.includes(id);
+          return h('div', { class: `entry ${open ? '' : 'unknown locked-weapon'}` }, h('div', { class: 'entry-art' }, this.icon(`w_${id}`)), h('div', null, h('div', { class: 'entry-tag' }, open ? (STARTER_WEAPON_IDS.includes(id) ? 'Starter' : 'Unlocked') : 'Locked'), h('div', { class: 'entry-name' }, w.name), h('div', { class: 'entry-lore' }, open ? w.desc : `${w.desc} ${this.weaponEarnText(id)}`)));
+        }),
+      );
+    } else if (tab === 'enemies') {
       body = h(
         'div',
         { class: 'codex-grid' },
@@ -627,7 +645,7 @@ export class UI implements GameUI {
     this.nav.layer = null;
     this.lastOpts = opts;
     this.clearedBefore = save.data.progress.chaptersCleared;
-    const g = new Game(this.app, this.a, this.input, this, { ...opts, meta: metaBonusFor(opts.character) });
+    const g = new Game(this.app, this.a, this.input, this, { ...opts, meta: metaBonusFor(opts.character), weaponPool: weaponPoolFor(opts.character) });
     this.game = g;
     this.app.stage.addChild(g.root);
     this.hud = new Hud(this.a, () => g.modal === 'none' && g.setModal('pause'), () => this.input.press('spell'));
@@ -1145,8 +1163,36 @@ export class UI implements GameUI {
 
   private showArmory(): void {
     const list = h('div', { class: 'armory' });
+    const weapons = h('div', { class: 'armory' });
     const bal = h('div', { class: 'shards' });
     const render = () => {
+      const owned = save.data.meta.weapons;
+      weapons.replaceChildren(
+        ...LOCKED_WEAPON_IDS.map((id) => {
+          const w = WEAPONS[id];
+          const u = WEAPON_UNLOCKS[id];
+          const has = owned.includes(id);
+          const afford = save.data.meta.shards >= u.shards;
+          return h(
+            'div',
+            { class: `arm weapon ${has ? 'maxed' : 'locked'}` },
+            this.icon(`w_${id}`, 'arm-icon'),
+            h('div', { class: 'arm-text' }, h('b', null, w.name), h('span', null, has ? w.desc : `${w.desc} ${this.weaponEarnText(id)}`)),
+            this.btn(has ? 'Unlocked' : `${u.shards} shards`, () => {
+              const next = buyWeapon(owned, save.data.meta.shards, id);
+              if (next === null) {
+                this.toast(has ? 'Already unlocked' : `Need ${u.shards - save.data.meta.shards} more shards`, '#ffc94d');
+                return;
+              }
+              save.data.meta.shards = next;
+              save.write();
+              audio.play('evolve', { vol: 0.5 });
+              this.toast(`${w.name} joins the weapon pool`, css(w.color));
+              render();
+            }, afford && !has ? 'small primary' : 'small', has ? { disabled: true } : {}),
+          );
+        }),
+      );
       bal.replaceChildren(h('img', { class: 'px', src: this.a.icons.i_star, alt: '' }), h('b', null, String(save.data.meta.shards)), h('span', null, 'Star Shards'));
       list.replaceChildren(
         ...ARMORY.map((it) => {
@@ -1177,7 +1223,7 @@ export class UI implements GameUI {
     const el = h(
       'div',
       { class: 'screen select' },
-      h('div', { class: 'panel wide tall' }, h('h2', null, 'Armory'), bal, h('div', { class: 'hint left' }, 'Upgrades here apply to every hero. Earn Star Shards from coins you have left at the end of a run (10 coins = 1 shard), from kills, and from clearing chapters.'), h('div', { class: 'scroll' }, list), h('div', { class: 'row end' }, this.btn('Back', () => this.showMenu(), 'primary'))),
+      h('div', { class: 'panel wide tall' }, h('h2', null, 'Armory'), bal, h('div', { class: 'hint left' }, 'Upgrades here apply to every hero. Earn Star Shards from coins you have left at the end of a run (10 coins = 1 shard), from kills, and from clearing chapters.'), h('div', { class: 'scroll' }, h('h3', null, 'Upgrades'), list, h('h3', null, 'Weapons'), h('div', { class: 'hint left' }, 'Only the starter weapons (and your hero’s own) can turn up in runs at first. Unlock the rest here, or for free with the achievement named on each.'), weapons), h('div', { class: 'row end' }, this.btn('Back', () => this.showMenu(), 'primary'))),
     );
     this.showScreen(el, () => this.showMenu());
   }

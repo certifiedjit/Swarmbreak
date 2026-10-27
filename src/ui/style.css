@@ -557,3 +557,9 @@ body.touch .card-key { display: none; }
 .res-hero img { width: 32px; height: 40px; }
 .res-hero b { display: block; font-family: var(--head); font-size: 12px; color: var(--c); font-weight: 400; }
 .res-hero span { color: var(--dim); font-size: 13px; }
+
+/* weapon unlocks (Armory + Codex) */
+.arm-icon { width: 32px; height: 32px; flex: none; }
+.arm.weapon.locked .arm-icon { filter: grayscale(1) brightness(0.6); }
+.armory + h3, .scroll > h3 { margin: 14px 0 8px; }
+.entry.locked-weapon .entry-art img { filter: grayscale(1) brightness(0.45); }

@@ -38,9 +38,9 @@ export function shopPrice(base: number, tier: number, priceMult = 1): number {
  * Roll the drone's stock: two upgrades for your current build (always Rare
  * or better), a full heal, a reroll pack and a sealed Epic-or-better cache.
  */
-export function rollShop(rng: Rng, build: Build, luck: number, tier: number, priceMult = 1): ShopItem[] {
+export function rollShop(rng: Rng, build: Build, luck: number, tier: number, priceMult = 1, unlockedWeapons?: readonly string[]): ShopItem[] {
   const items: ShopItem[] = [];
-  const ups = rollLevelUpOffers(rng, build, luck, 2).filter((o) => o.kind !== 'heal' && o.kind !== 'coins');
+  const ups = rollLevelUpOffers(rng, build, luck, 2, unlockedWeapons).filter((o) => o.kind !== 'heal' && o.kind !== 'coins');
   ups.forEach((o, i) => {
     // the first is at least Rare, the second at least Epic
     const min = (i === 0 ? 2 : 3) as RarityIndex;

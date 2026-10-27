@@ -401,10 +401,9 @@ export const WEAPONS: Record<string, WeaponDef> = {
   }),
 };
 
-/** Weapons that can appear in the level-up pool in this build. */
 /** All non-evolved weapons. */
 export const ALL_WEAPON_IDS = Object.values(WEAPONS).filter((w) => !w.evolved).map((w) => w.id);
-/** Weapons in the pool from the start; the rest are unlocked in the Armory with Star Shards. */
+/** Weapons in the pool from the start; the rest unlock in the Armory or by achievements (systems/weaponUnlocks.ts). */
 export const STARTER_WEAPON_IDS = ['oathblade', 'rune_halo', 'arc_chain', 'plasma_glaive', 'seeker_swarm', 'gravemaul', 'searing_mantle'];
 /** kept for callers that want "every base weapon" */
 export const BASE_WEAPON_IDS = ALL_WEAPON_IDS;

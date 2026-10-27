@@ -12,6 +12,7 @@ import { CHARACTERS } from '../data/characters';
 import { MAPS, MAP_ORDER, type MapDef } from '../data/maps';
 import { RARITY_INFO, rarityOf, type RarityIndex } from '../data/rarity';
 import { SPELLS } from '../data/spells';
+import { ALL_WEAPON_IDS } from '../data/weapons';
 import type { StatBlock, StatMod } from '../data/stats';
 import type { Input } from '../input/input';
 import type { Assets } from '../render/assets';
@@ -129,6 +130,8 @@ export interface GameOptions {
   seed?: number;
   /** permanent bonuses (skill tree + Armory) */
   meta?: MetaBonus;
+  /** weapons that can be offered this run (default: all) */
+  weaponPool?: string[];
 }
 
 export class Game {
@@ -173,6 +176,8 @@ export class Game {
   readonly weapons: Weapons;
   /** the hero's signature passive */
   readonly passive: HeroPassive;
+  /** weapons that can be offered this run */
+  readonly weaponPool: readonly string[];
   readonly pickups: Pickups;
   readonly hazards: Hazards;
   readonly objects: WorldObjects;
@@ -284,6 +289,7 @@ export class Game {
     this.reduced = save.data.settings.effects === 'reduced';
 
     this.build = newBuild(opts.character);
+    this.weaponPool = opts.weaponPool ?? ALL_WEAPON_IDS;
     const meta = opts.meta ?? emptyBonus();
     this.metaMods = meta.mods;
     this.rerolls += meta.rerolls;
@@ -1047,7 +1053,7 @@ export class Game {
     let offers: Offer[] | null = null;
     while (this.pendingLevels > 0) {
       this.pendingLevels--;
-      const rolled = rollLevelUpOffers(this.lootRng, this.build, this.stats.luck);
+      const rolled = rollLevelUpOffers(this.lootRng, this.build, this.stats.luck, 3, this.weaponPool);
       if (!isFillerOnly(rolled.map((o) => o.kind))) {
         offers = rolled;
         break;
@@ -1103,7 +1109,7 @@ export class Game {
     if (this.freeRerolls > 0) this.freeRerolls--;
     else if (this.rerolls > 0) this.rerolls--;
     else return null;
-    this.currentOffers = rollLevelUpOffers(this.lootRng, this.build, this.stats.luck);
+    this.currentOffers = rollLevelUpOffers(this.lootRng, this.build, this.stats.luck, 3, this.weaponPool);
     return this.currentOffers;
   }
 
@@ -1120,7 +1126,7 @@ export class Game {
     if (!o || o.kind === 'evolution' || o.kind === 'heal' || o.kind === 'coins') return null;
     this.banishes--;
     this.build.banished.push(o.id);
-    this.currentOffers = rollLevelUpOffers(this.lootRng, this.build, this.stats.luck);
+    this.currentOffers = rollLevelUpOffers(this.lootRng, this.build, this.stats.luck, 3, this.weaponPool);
     return this.currentOffers;
   }
 
@@ -1186,7 +1192,7 @@ export class Game {
 
   offerStillValid(o: Offer): boolean {
     if (o.kind === 'evolution') return eligibleEvolutions(this.build).some((e) => e.weapon === o.id);
-    return upgradePool(this.build).some((p) => p.kind === o.kind && p.id === o.id);
+    return upgradePool(this.build, this.weaponPool).some((p) => p.kind === o.kind && p.id === o.id);
   }
 
   closeShop(): void {
@@ -1210,7 +1216,7 @@ export class Game {
     }
     this.stats_.chestsByRarity[rarity]++;
     save.data.stats.chestsOpened++;
-    const offer = rollChestItem(this.lootRng, this.build, rarity);
+    const offer = rollChestItem(this.lootRng, this.build, rarity, this.weaponPool);
     const res: ChestOpenResult = { rarity, offer, odds, free, legendary, paid };
     audio.play('chestOpen');
     if (this.modal === 'none') {

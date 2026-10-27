@@ -54,7 +54,7 @@ export interface SaveData {
   skins: { unlocked: string[]; equipped: Record<string, string> };
   history: RunSummary[];
   /** permanent progression: Star Shards, Armory ranks, per-hero mastery */
-  meta: { shards: number; shardsEarned: number; armory: Record<string, number>; mastery: Record<string, MasteryState> };
+  meta: { shards: number; shardsEarned: number; armory: Record<string, number>; mastery: Record<string, MasteryState>; weapons: string[] };
 }
 
 const KEY = 'swarmbreak.save.v1';
@@ -70,7 +70,7 @@ export function defaultSave(): SaveData {
     codex: { evolutions: [], enemies: [] },
     skins: { unlocked: ['default'], equipped: {} },
     history: [],
-    meta: { shards: 0, shardsEarned: 0, armory: {}, mastery: {} },
+    meta: { shards: 0, shardsEarned: 0, armory: {}, mastery: {}, weapons: [] },
   };
 }
 
@@ -95,6 +95,7 @@ export function upgradeSave(d: SaveData): SaveData {
     d.stats.longestEndless = best;
   }
   if (!Array.isArray(d.heroes.unlocked)) d.heroes.unlocked = [];
+  if (!Array.isArray(d.meta.weapons)) d.meta.weapons = [];
   return d;
 }
 
