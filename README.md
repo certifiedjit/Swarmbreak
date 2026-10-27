@@ -2,7 +2,7 @@
 
 A sci-fi dark fantasy horde-survival roguelite for the browser. Hundreds of void horrors pour out of a dead star system; your weapons fire on their own, you level up constantly, crack open chests, and break mini-bosses and titans. All art and sound are generated in code. Nothing in the game costs real money, ever.
 
-**Current milestone:** the full story — Chapters 1–3 (The Starship Graveyard, The Cathedral Moon, The Black Sun) with an ending and credits — and Endless on every map, with the Warden.
+**Current milestone:** the full story — Chapters 1–3 (The Starship Graveyard, The Cathedral Moon, The Black Sun) with an ending and credits — and Endless on every map, with six playable heroes.
 
 ## Play
 
@@ -36,9 +36,22 @@ Weapons fire automatically. Settings has music/effects volume, **Reduced effects
 - **Shrines:** stand inside to charge, then pick a relic. **Cursed shrines** make enemies stronger in exchange for coins, a better chest and an elite wave.
 - **Evolutions:** a weapon at level 7 plus its matching passive turns into an evolved form (shown in the Codex once discovered).
 
+### Heroes
+
+Every hero is earned by playing; locked cards show your progress.
+
+| Hero | Unlock | Start kit | Passive |
+|---|---|---|---|
+| **Warden** — Void-Forged Knight | From the start | Oathblade · Aegis Dash | **Bulwark:** high HP and armour; enemies that hit you take thorns (more with armour). |
+| **Glint** — Cyber-Ninja Scout | Beat Chapter 1 | Plasma Glaive · Aegis Dash | **Afterimage:** every 3rd projectile you launch is a guaranteed crit. Fast, 12% dodge, long reach, low HP. |
+| **Voidcaller** — Hooded Summoner | Kill 5,000 enemies | Void Spirits · Void Pact | **Binding:** kills have a 3% chance to raise a void spirit; summons last longer; Void Pact cools down 25% faster. 20% less damage to mini-bosses and bosses. |
+| **Riven** — Techno-Engineer | Beat Chapter 2 | Sentry Turret · Nova Burst | **Overbuilt:** stand still for 1 s to deploy a field turret (up to 2); +25% damage to elites, mini-bosses and bosses. |
+| **Fortune** — Cursed-Coin Rogue | Open 100 chests | Arc Chain · Gem Tempest | **Loaded Dice:** +40% luck, chests 25% cheaper, a free reroll on every level-up; coins you pick up sometimes burst. |
+| **Pyre** — Plasma Sorcerer | Survive 15 minutes in Endless | Void Flame · Nova Burst | **Kindling:** a trail of burning ground while you move; up to +60% damage as HP falls. |
+
 ### Between runs
 
-- **Mastery:** each hero levels up permanently from the XP you collect in runs, plus a bonus for clearing a chapter. Each mastery level is one skill point for that hero's **skill tree** (Warden: Bulwark / Oath / Salvage branches). Refunds are free and unlimited.
+- **Mastery:** each hero levels up permanently from the XP you collect in runs, plus a bonus for clearing a chapter. Each mastery level is one skill point for that hero's 12-node **skill tree** (three branches: defence, offence, utility — e.g. the Warden's Bulwark / Oath / Salvage, Glint's Evasion / Edge / Scavenge). Every hero but the Warden has a signature offence capstone that strengthens their passive. Refunds are free and unlimited.
 - **Star Shards:** coins you earned and didn't spend convert at the end of a run (10 coins = 1 shard), plus a little for kills and clears. Spend them in the **Armory** on upgrades that apply to every hero: max HP, damage, pickup range, starting coins, coin gain, cheaper chests and shops, and extra rerolls, banishes and skips.
 - **Salvage Drone:** lands during every breather (and at each Endless milestone). Walk into it to open a shop: two Rare-or-better upgrades for your build, a full heal, a reroll pack and a sealed Epic-or-better cache. Prices rise each breather. A couple of fresh chests also spawn near you at the start of every round.
 

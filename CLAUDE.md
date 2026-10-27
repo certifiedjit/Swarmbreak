@@ -71,10 +71,15 @@ Settings has a testing toggle that unlocks everything.
   roll with a jackpot, mastery XP); then See results or Overtime (Endless scaling from the final round, a great boss
   every 150 s). `MAP_ORDER` in maps.ts is the chapter order; the finale logic keys off the last entry.
 - Endless on every cleared chapter's map.
-- Heroes: only the **Warden** is playable (`available: true`). Glint, Voidcaller, Riven, Fortune, Pyre exist as
-  `CharacterDef`s with `available: false`, unlock text, start weapon, but no art, passive behaviour or skill tree.
-  Hero bodies are drawn in `heroArt.ts` (`drawHeroFrames({ body, palette })`; see the warden/sprout bodies).
-  Skill trees are in `SKILL_TREES` (`src/systems/mastery.ts`), only `warden` exists.
+- Heroes: all six are playable — Warden (from the start), Glint, Voidcaller, Riven, Fortune, Pyre (unlocked by
+  `HERO_UNLOCKS` in `src/systems/heroes.ts`; `isHeroUnlocked` / `syncHeroUnlocks` in `src/core/meta.ts`; celebrated
+  heroes are recorded in `save.data.heroes.unlocked`). Passive numbers + pure rules: `src/systems/heroes.ts`; wired
+  into the sim by `src/game/heroPassive.ts` (`g.passive`). Bodies: `heroArt.ts` (Warden, Sprout) + `heroBodies.ts`
+  (the other five); `HERO_PALETTES`, `HERO_BODIES`. Skill trees: `SKILL_TREES` + per-hero branch names in
+  `TREE_BRANCHES` (`src/systems/mastery.ts`); each non-Warden tree's offence capstone has the `passive` perk that
+  strengthens the hero's passive. The Sprout skin works on every hero.
+- Balance note: the bot keeps ~100 px from mini-bosses, so the melee Warden fights them slower than ranged heroes do;
+  compare hero clear times with that in mind.
 - 19 weapons + 19 evolutions, 19 passives, 12 relics, 6 spells, 6 weapon + 6 passive slots.
 - Meta: hero mastery + free-refund skill trees, Star Shards + Armory, codex, records, run history, stats.
   Not built yet: weapon unlocks (`STARTER_WEAPON_IDS` vs the rest), achievements, cosmetics + collection screen,
