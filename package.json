@@ -1,0 +1,38 @@
+{
+  "name": "swarmbreak",
+  "version": "0.1.0",
+  "description": "Swarmbreak — a sci-fi dark fantasy horde-survival roguelite for the browser",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "build:single": "tsc && vite build --mode single",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "typecheck": "tsc",
+    "build:page": "npm run build:single && node scripts/artifact.mjs",
+    "playtest": "node scripts/playtest/bot.cjs"
+  },
+  "dependencies": {
+    "@fontsource/jersey-10": "^5.3.0",
+    "@fontsource/silkscreen": "^5.3.0",
+    "pixi.js": "^8.22.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/pngjs": "^6.0.5",
+    "eslint": "^10.13.0",
+    "globals": "^17.13.0",
+    "playwright": "^1.56.1",
+    "pngjs": "^7.0.0",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.1",
+    "vite": "^8.3.5",
+    "vite-plugin-singlefile": "^2.3.4",
+    "vitest": "^5.0.5"
+  },
+  "private": true,
+  "type": "module"
+}
