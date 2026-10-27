@@ -3,6 +3,7 @@
  * glow and part swaps: cape/back item → held weapon → legs → torso → helm → shield.
  */
 import { OUTLINE, Pix, blend, shade } from './pixel';
+import { FORTUNE_PALETTE, GLINT_PALETTE, PYRE_PALETTE, RIVEN_PALETTE, VOIDCALLER_PALETTE, drawFortune, drawGlint, drawPyre, drawRiven, drawVoidcaller, leg, type Pose } from './heroBodies';
 
 export const HERO_W = 32;
 export const HERO_H = 40;
@@ -20,7 +21,7 @@ export interface HeroPalette {
   bladeCore: number;
 }
 
-export type HeroBody = 'warden' | 'sprout';
+export type HeroBody = 'warden' | 'sprout' | 'glint' | 'voidcaller' | 'riven' | 'fortune' | 'pyre';
 
 export interface HeroLook {
   body: HeroBody;
@@ -39,29 +40,6 @@ export const WARDEN_PALETTE: HeroPalette = {
   shieldRim: 0x4a556f,
   bladeCore: 0xeaffff,
 };
-
-interface Pose {
-  bob: number;
-  frontLeg: [number, number];
-  backLeg: [number, number];
-  cape: number;
-  glow: number;
-  victory: boolean;
-}
-
-function leg(p: Pix, hipX: number, hipY: number, footDx: number, footLift: number, c: number, cHi: number, boot: number): void {
-  const fx = hipX + footDx;
-  const fy = 36 - footLift;
-  for (let t = 0; t <= 1.001; t += 1 / 10) {
-    const x = hipX + (fx - hipX) * t;
-    const y = hipY + (fy - hipY) * t;
-    p.rect(Math.round(x), Math.round(y), 4, 1, c);
-    p.set(Math.round(x) + 3, Math.round(y), cHi);
-  }
-  // boot
-  p.rect(fx - 0, fy, 5, 2, boot);
-  p.set(fx + 4, fy, shade(boot, 1.4));
-}
 
 function drawWarden(pal: HeroPalette, pose: Pose): Pix {
   const p = new Pix(HERO_W, HERO_H);
@@ -298,14 +276,37 @@ export interface HeroFrames {
   victory: Pix;
 }
 
+const DRAW: Record<HeroBody, (pal: HeroPalette, pose: Pose) => Pix> = {
+  warden: drawWarden,
+  sprout: drawSprout,
+  glint: drawGlint,
+  voidcaller: drawVoidcaller,
+  riven: drawRiven,
+  fortune: drawFortune,
+  pyre: drawPyre,
+};
+
+/** each body's own default palette (Sprout ignores its palette) */
+export const HERO_PALETTES: Record<HeroBody, HeroPalette> = {
+  warden: WARDEN_PALETTE,
+  sprout: WARDEN_PALETTE,
+  glint: GLINT_PALETTE,
+  voidcaller: VOIDCALLER_PALETTE,
+  riven: RIVEN_PALETTE,
+  fortune: FORTUNE_PALETTE,
+  pyre: PYRE_PALETTE,
+};
+
+export const HERO_BODIES = Object.keys(DRAW) as HeroBody[];
+
 export function drawHeroFrames(look: HeroLook): HeroFrames {
-  const draw = look.body === 'sprout' ? drawSprout : drawWarden;
+  const draw = DRAW[look.body];
   const idle = IDLE_BOB.map((bob, i) =>
-    draw(look.palette, { bob, frontLeg: [0, 0], backLeg: [0, 0], cape: i % 2, glow: IDLE_GLOW[i], victory: false }),
+    draw(look.palette, { bob, frontLeg: [0, 0], backLeg: [0, 0], cape: i % 2, glow: IDLE_GLOW[i], victory: false, t: i / IDLE_BOB.length }),
   );
   const run = RUN_BOB.map((bob, i) =>
-    draw(look.palette, { bob, frontLeg: RUN_FRONT[i], backLeg: RUN_BACK[i], cape: RUN_CAPE[i], glow: 0.9, victory: false }),
+    draw(look.palette, { bob, frontLeg: RUN_FRONT[i], backLeg: RUN_BACK[i], cape: RUN_CAPE[i], glow: 0.9, victory: false, t: i / RUN_BOB.length }),
   );
-  const victory = draw(look.palette, { bob: 0, frontLeg: [1, 0], backLeg: [-1, 0], cape: 2, glow: 1, victory: true });
+  const victory = draw(look.palette, { bob: 0, frontLeg: [1, 0], backLeg: [-1, 0], cape: 2, glow: 1, victory: true, t: 0.25 });
   return { idle, run, victory };
 }
