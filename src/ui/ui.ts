@@ -27,6 +27,7 @@ import type { ShopItem } from '../systems/shop';
 import { getMastery, heroUnlockStats, isHeroUnlocked, metaBonusFor, syncHeroUnlocks, treeFor, weaponPoolFor } from '../core/meta';
 import { LOCKED_WEAPON_IDS, WEAPON_UNLOCKS, buyWeapon } from '../systems/weaponUnlocks';
 import { unlockProgress } from '../systems/heroes';
+import { CURSES, START_THREATS, TIERS, challengeLabel, challengeShardMult, parseChallengeKey, challengeKey, tierUnlocked, type Challenge, type TierId } from '../systems/difficulty';
 import { FIELD_TURRET } from '../game/arsenal';
 import { css, h } from './dom';
 import { Hud } from './hud';
@@ -82,7 +83,7 @@ export class UI implements GameUI {
   private lastOpts: GameOptions | null = null;
   private clearedBefore = 0;
   private adaptT = 0;
-  private sel = { character: 'warden', skin: 'default', endlessMap: 'graveyard' };
+  private sel: { character: string; skin: string; endlessMap: string; tier: TierId; challenge: Challenge } = { character: 'warden', skin: 'default', endlessMap: 'graveyard', tier: 'normal', challenge: { threat: 1, curses: [] } };
   private onScreenBack: (() => void) | null = null;
 
   constructor(app: Application, assets: Assets, input: Input, root: HTMLElement) {
@@ -339,6 +340,7 @@ export class UI implements GameUI {
           const m = MAPS[id];
           const unlocked = m.available && (save.data.settings.unlockAll || m.chapter <= cleared + 1);
           const done = cleared >= m.chapter;
+          const best = save.data.progress.tiers[id] ?? -1;
           return h(
             'button',
             {
@@ -357,18 +359,97 @@ export class UI implements GameUI {
             },
             h('div', { class: 'ch-num' }, `CHAPTER ${['I', 'II', 'III'][m.chapter - 1]}`),
             h('div', { class: 'ch-name' }, m.name),
-            h('div', { class: 'ch-state' }, !m.available ? 'Coming in a later update' : done ? '✓ Cleared' : unlocked ? `5 rounds · mini-bosses · ${BOSSES[m.boss]?.name ?? 'a boss'}` : `Beat Chapter ${m.chapter - 1}`),
+            h('div', { class: 'ch-state' }, !m.available ? 'Coming in a later update' : done ? `✓ Cleared${best >= 0 ? ` on ${TIERS[best].name}` : ''}` : unlocked ? `5 rounds · mini-bosses · ${BOSSES[m.boss]?.name ?? 'a boss'}` : `Beat Chapter ${m.chapter - 1}`),
+            m.available ? this.medals(best) : null,
           );
         }),
       );
+      tierRow.replaceChildren(this.tierPicker(chosen, () => renderCh()));
     };
+    const tierRow = h('div', { class: 'tier-row' });
     renderCh();
     const el = h(
       'div',
       { class: 'screen select' },
-      h('div', { class: 'panel wide' }, h('h2', null, 'Story'), chapters, this.charPicker(() => undefined, () => this.showStorySelect()), h('div', { class: 'row end' }, this.btn('Back', () => this.showMenu()), this.btn('Start chapter', () => this.startRun({ mode: 'story', map: chosen, character: this.sel.character, skin: this.sel.skin }), 'primary', { 'data-autofocus': true }))),
+      h('div', { class: 'panel wide' }, h('h2', null, 'Story'), chapters, tierRow, this.charPicker(() => undefined, () => this.showStorySelect()), h('div', { class: 'row end' }, this.btn('Back', () => this.showMenu()), this.btn(`Overtime: ${challengeLabel(this.sel.challenge)}`, () => this.overtimeSettings(() => this.showStorySelect()), 'small'), this.btn('Start chapter', () => this.startRun({ mode: 'story', map: chosen, character: this.sel.character, skin: this.sel.skin, tier: this.sel.tier, challenge: { ...this.sel.challenge } }), 'primary', { 'data-autofocus': true }))),
     );
     this.showScreen(el, () => this.showMenu());
+  }
+
+  /** five pips, lit up to the best tier cleared */
+  private medals(best: number): HTMLElement {
+    return h('div', { class: 'medals', title: best >= 0 ? `Best clear: ${TIERS[best].name}` : 'Not cleared yet' }, TIERS.map((t, i) => h('i', { class: i <= best ? 'on' : '', style: `--c:${t.color}` })));
+  }
+
+  private tierPicker(map: string, onChange: () => void): HTMLElement {
+    const best = save.data.progress.tiers[map] ?? -1;
+    const ok = (id: TierId) => save.data.settings.unlockAll || tierUnlocked(id, best);
+    if (!ok(this.sel.tier)) this.sel.tier = 'normal';
+    const cur = TIERS.find((t) => t.id === this.sel.tier)!;
+    return h(
+      'div',
+      { class: 'tiers' },
+      h('div', { class: 'pick-label' }, 'Difficulty'),
+      h(
+        'div',
+        { class: 'tier-btns' },
+        TIERS.map((t, i) =>
+          h('button', {
+            class: `tier ${t.id === this.sel.tier ? 'sel' : ''} ${ok(t.id) ? '' : 'locked'}`,
+            'data-nav': true,
+            style: `--c:${t.color}`,
+            onclick: () => {
+              if (!ok(t.id)) return this.toast(`Clear this chapter on ${TIERS[i - 1].name} to unlock ${t.name}`, t.color);
+              audio.play('click');
+              this.sel.tier = t.id;
+              onChange();
+            },
+          }, h('b', null, t.name), h('span', null, ok(t.id) ? `Shards ×${t.shards}` : `Clear on ${TIERS[i - 1].name}`)),
+        ),
+      ),
+      h('div', { class: 'tier-desc', style: `--c:${cur.color}` }, h('b', null, `${cur.name}: `), cur.desc, cur.twist ? h('em', null, ` ${cur.twist}`) : null),
+    );
+  }
+
+  /** starting Threat + curse toggles (Endless, and Overtime after a chapter) */
+  private challengePicker(onChange: () => void): HTMLElement {
+    const wrap = h('div', { class: 'challenge' });
+    const c = this.sel.challenge;
+    const render = () => {
+      const bonus = Math.round((challengeShardMult(c) - 1) * 100);
+      wrap.replaceChildren(
+        h('div', { class: 'pick-label' }, 'Starting Threat'),
+        h('div', { class: 'threat-btns' }, START_THREATS.map((t) => h('button', { class: `thr ${c.threat === t ? 'sel' : ''}`, 'data-nav': true, onclick: () => {
+          audio.play('click');
+          c.threat = t;
+          render();
+          onChange();
+        } }, String(t)))),
+        h('div', { class: 'pick-label' }, 'Curses'),
+        h('div', { class: 'curse-btns' }, CURSES.map((cu) => {
+          const on = c.curses.includes(cu.id);
+          return h('button', { class: `curse ${on ? 'on' : ''}`, 'data-nav': true, style: `--c:${cu.color}`, onclick: () => {
+            audio.play(on ? 'click' : 'curse', { vol: 0.5 });
+            c.curses = on ? c.curses.filter((x) => x !== cu.id) : [...c.curses, cu.id];
+            render();
+            onChange();
+          } }, h('i', null, on ? '✓' : ''), h('div', null, h('b', null, cu.name), h('span', null, `${cu.desc} +${Math.round(cu.shards * 100)}% shards`)));
+        })),
+        h('div', { class: 'challenge-bonus' }, bonus > 0 ? `Star Shard bonus +${bonus}% · records are kept separately for this setup` : 'No bonus: the standard run.'),
+      );
+    };
+    render();
+    return wrap;
+  }
+
+  /** a small modal to set the challenge Overtime will use */
+  private overtimeSettings(back: () => void): void {
+    const done = () => {
+      this.closeModal();
+      back();
+    };
+    const el = h('div', { class: 'modal' }, h('div', { class: 'panel' }, h('h2', null, 'Overtime challenge'), h('div', { class: 'hint left' }, 'If you choose Overtime after the chapter boss, it starts at this Threat (or the final round’s, if higher) with these curses on. Your chapter’s difficulty tier keeps scaling it.'), this.challengePicker(() => undefined), h('div', { class: 'row end' }, this.btn('Done', done, 'primary', { 'data-autofocus': true }))));
+    this.openModal(el, done);
   }
 
   private showEndlessSelect(): void {
@@ -378,8 +459,9 @@ export class UI implements GameUI {
     if (!maps.includes(this.sel.endlessMap)) this.sel.endlessMap = maps[0];
     const bestEl = h('div', { class: 'best-line' });
     const renderBest = () => {
-      const rec = save.data.bests[this.sel.endlessMap]?.[this.sel.character];
-      bestEl.textContent = rec ? `Best with ${CHARACTERS[this.sel.character].name}: ${formatTime(rec.time)} · ${rec.kills} kills` : 'No record yet on this map.';
+      const k = challengeKey(this.sel.challenge);
+      const rec = save.data.bests[k ? `${this.sel.endlessMap}|${k}` : this.sel.endlessMap]?.[this.sel.character];
+      bestEl.textContent = rec ? `Best with ${CHARACTERS[this.sel.character].name} (${challengeLabel(this.sel.challenge)}): ${formatTime(rec.time)} · ${rec.kills} kills` : `No record yet on this map at ${challengeLabel(this.sel.challenge)}.`;
     };
     const list = h('div', { class: 'chapters' });
     const render = () => {
@@ -419,8 +501,9 @@ export class UI implements GameUI {
         h('h2', null, 'Endless'),
         list,
         this.charPicker(renderBest, () => this.showEndlessSelect()),
+        this.challengePicker(renderBest),
         bestEl,
-        h('div', { class: 'row end' }, this.btn('Back', () => this.showMenu()), this.btn('Survive', () => this.startRun({ mode: 'endless', map: this.sel.endlessMap, character: this.sel.character, skin: this.sel.skin }), 'primary', { 'data-autofocus': true })),
+        h('div', { class: 'row end' }, this.btn('Back', () => this.showMenu()), this.btn('Survive', () => this.startRun({ mode: 'endless', map: this.sel.endlessMap, character: this.sel.character, skin: this.sel.skin, challenge: { ...this.sel.challenge } }), 'primary', { 'data-autofocus': true })),
       ),
     );
     this.showScreen(el, () => this.showMenu());
@@ -601,7 +684,11 @@ export class UI implements GameUI {
   private showRecords(): void {
     const st = save.data.stats;
     const bests: HTMLElement[] = [];
-    for (const [map, byChar] of Object.entries(save.data.bests)) for (const [ch, r] of Object.entries(byChar)) bests.push(h('div', { class: 'rec-row' }, h('span', null, `${MAPS[map]?.name ?? map} · ${CHARACTERS[ch]?.name ?? ch}`), h('b', null, `${formatTime(r.time)} · ${r.kills} kills`)));
+    for (const [key, byChar] of Object.entries(save.data.bests)) {
+      const [map, ck] = key.split('|');
+      const setup = ck ? ` · ${challengeLabel(parseChallengeKey(ck))}` : '';
+      for (const [ch, r] of Object.entries(byChar)) bests.push(h('div', { class: 'rec-row' }, h('span', null, `${MAPS[map]?.name ?? map} · ${CHARACTERS[ch]?.name ?? ch}${setup}`), h('b', null, `${formatTime(r.time)} · ${r.kills} kills`)));
+    }
     const el = h(
       'div',
       { class: 'screen select' },
@@ -740,13 +827,13 @@ export class UI implements GameUI {
         h(
           'div',
           { class: 'row center lu-actions' },
-          this.btn(g.freeRerolls > 0 ? `Reroll (free)` : `Reroll (${g.rerolls})`, () => {
+          this.btn(g.mods.noRerolls ? 'Reroll (cursed)' : g.freeRerolls > 0 ? `Reroll (free)` : `Reroll (${g.rerolls})`, () => {
             const next = g.rerollLevelUp();
             if (next) {
               render(next);
               this.nav.focusFirst();
             }
-          }, g.freeRerolls > 0 ? 'small glow' : 'small', g.rerolls > 0 || g.freeRerolls > 0 ? {} : { disabled: true }),
+          }, g.freeRerolls > 0 && !g.mods.noRerolls ? 'small glow' : 'small', !g.mods.noRerolls && (g.rerolls > 0 || g.freeRerolls > 0) ? {} : { disabled: true }),
           this.btn(banish ? 'Cancel banish' : `Banish (${g.banishes})`, () => {
             banish = !banish;
             render(list);
@@ -944,7 +1031,7 @@ export class UI implements GameUI {
         'div',
         { class: 'cards' },
         card('end', 'i_chest', 'See results', ['End the run here.', 'Story and rewards first.'], () => g.endVictory(), true),
-        card('ot', 'i_skull', 'Overtime', ['Keep this build and keep fighting.', 'The swarm scales on from here, and a great boss arrives every 2½ minutes.', 'Overtime kills and XP still count.'], () => g.startOvertime()),
+        card('ot', 'i_skull', 'Overtime', ['Keep this build and keep fighting.', `The swarm scales on from here, and a great boss arrives every ${g.challenge.curses.includes('bosses') ? '75 seconds' : '2½ minutes'}.`, 'Overtime kills and XP still count.', ...(challengeKey(g.challenge) ? [`Challenge: ${challengeLabel(g.challenge)}`] : [])], () => g.startOvertime()),
       ),
     );
     this.openModal(el, null, null, 0.4);
@@ -1163,7 +1250,7 @@ export class UI implements GameUI {
 
   private showArmory(): void {
     const list = h('div', { class: 'armory' });
-    const weapons = h('div', { class: 'armory' });
+    const weapons = h('div', { class: 'armory weapons' });
     const bal = h('div', { class: 'shards' });
     const render = () => {
       const owned = save.data.meta.weapons;
@@ -1177,7 +1264,7 @@ export class UI implements GameUI {
             'div',
             { class: `arm weapon ${has ? 'maxed' : 'locked'}` },
             this.icon(`w_${id}`, 'arm-icon'),
-            h('div', { class: 'arm-text' }, h('b', null, w.name), h('span', null, has ? w.desc : `${w.desc} ${this.weaponEarnText(id)}`)),
+            h('div', { class: 'arm-text' }, h('b', null, w.name), h('span', null, w.desc)),
             this.btn(has ? 'Unlocked' : `${u.shards} shards`, () => {
               const next = buyWeapon(owned, save.data.meta.shards, id);
               if (next === null) {
@@ -1323,7 +1410,7 @@ export class UI implements GameUI {
       h(
         'div',
         { class: 'panel wide tall' },
-        h('div', { class: 'res-head' }, h('div', { class: 'res-title' }, title), h('div', { class: 'res-sub' }, sub), r.newRecord ? h('div', { class: 'res-record' }, 'NEW RECORD!') : null, firstClear ? h('div', { class: 'res-record green' }, 'CHAPTER CLEARED') : null, ...heroNotes),
+        h('div', { class: 'res-head' }, h('div', { class: 'res-title' }, title), h('div', { class: 'res-sub' }, sub), r.tags.length ? h('div', { class: 'res-tags' }, r.tags.map((t) => h('span', null, t))) : null, r.newRecord ? h('div', { class: 'res-record' }, 'NEW RECORD!') : null, firstClear ? h('div', { class: 'res-record green' }, 'CHAPTER CLEARED') : null, ...heroNotes),
         h(
           'div',
           { class: 'scroll' },

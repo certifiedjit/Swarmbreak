@@ -92,6 +92,8 @@ export interface BossState {
   minions?: Enemy[];
   /** damage taken multiplier while guarded (1 = unguarded) */
   guard?: number;
+  /** Nightmare tier: seconds to the next barrage */
+  barrageT?: number;
 }
 
 export type ProjKind = 'glaive' | 'missile' | 'orbBlade' | 'shard' | 'bomb' | 'round' | 'bolt' | 'spirit';

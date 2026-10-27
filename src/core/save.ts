@@ -45,7 +45,7 @@ export interface RunSummary {
 export interface SaveData {
   version: 1;
   settings: Settings;
-  progress: { chaptersCleared: number };
+  progress: { chaptersCleared: number; /** best difficulty tier index cleared per chapter map (-1 / missing = none) */ tiers: Record<string, number> };
   bests: Record<string, Record<string, BestRecord>>;
   stats: { totalKills: number; chestsOpened: number; runs: number; bossesKilled: number; playTime: number; bestStreak: number; longestEndless: number };
   /** heroes unlocked by their condition (the unlock banner has been shown) */
@@ -63,7 +63,7 @@ export function defaultSave(): SaveData {
   return {
     version: 1,
     settings: { music: 0.6, sfx: 0.8, effects: 'full', damageNumbers: true, showFps: false, keys: structuredClone(DEFAULT_KEYS), unlockAll: false },
-    progress: { chaptersCleared: 0 },
+    progress: { chaptersCleared: 0, tiers: {} },
     bests: {},
     stats: { totalKills: 0, chestsOpened: 0, runs: 0, bossesKilled: 0, playTime: 0, bestStreak: 0, longestEndless: 0 },
     heroes: { unlocked: [] },
@@ -96,6 +96,8 @@ export function upgradeSave(d: SaveData): SaveData {
   }
   if (!Array.isArray(d.heroes.unlocked)) d.heroes.unlocked = [];
   if (!Array.isArray(d.meta.weapons)) d.meta.weapons = [];
+  // tiers arrived with difficulty: a chapter cleared before then counts as cleared on Normal
+  for (const [i, id] of ['graveyard', 'cathedral', 'black_sun'].entries()) if (d.progress.chaptersCleared > i && d.progress.tiers[id] === undefined) d.progress.tiers[id] = 1;
   return d;
 }
 

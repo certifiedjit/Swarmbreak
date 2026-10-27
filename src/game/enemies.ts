@@ -166,6 +166,13 @@ export function spawnDirector(g: Game, dt: number): void {
     cap = p.spawnCap;
     xpM = 1 + g.time / 300;
   }
+  // difficulty tier and curses
+  const md = g.mods;
+  hpM *= md.hp;
+  dmgM *= md.dmg;
+  spdM *= md.speed;
+  target *= md.density;
+  eliteChance = Math.min(0.6, Math.max(eliteChance * md.elites, md.eliteFloor));
   if (g.curseLevel) {
     hpM *= 1 + 0.25 * g.curseLevel;
     target *= 1 + 0.2 * g.curseLevel;
@@ -201,7 +208,7 @@ export function spawnEliteWave(g: Game, n: number, power: number): void {
   const p = g.flow ? { hpMult: g.flow.spec.hpMult, dmgMult: g.flow.spec.dmgMult } : endlessParams(g.endlessT);
   for (let i = 0; i < n; i++) {
     const [x, y] = spawnPoint(g);
-    const e = spawnEnemy(g, g.rng.pick(ids), x, y, { hpMult: p.hpMult, dmgMult: p.dmgMult, countsForMeter: false });
+    const e = spawnEnemy(g, g.rng.pick(ids), x, y, { hpMult: p.hpMult * g.mods.hp, dmgMult: p.dmgMult * g.mods.dmg, speedMult: g.mods.speed, countsForMeter: false });
     makeElite(g, e, g.rng.pick(ELITE_MOD_IDS), power);
   }
   audio.play('miniIntro', { vol: 0.6 });

@@ -13,7 +13,8 @@
  *
  * Flags: --map (graveyard|cathedral|black_sun), --mode (story|endless), --seconds (max sim time),
  * --seed, --boss, --overtime, --shots (comma list), --out (screenshot folder, default playtest-out),
- * --url (default http://localhost:5173/?debug), --character (default warden).
+ * --url (default http://localhost:5173/?debug), --character (default warden), --tier (story|normal|veteran|nightmare),
+ * --threat (Endless / Overtime starting Threat: 1|10|20|30), --curses (comma list: elites,nohealing,bosses,fast,norerolls).
  * Ends with "ERRORS:" followed by any page errors (none = good).
  */
 const { chromium } = require('playwright');
@@ -23,7 +24,7 @@ const out = args.out || 'playtest-out';
 fs.mkdirSync(out, { recursive: true });
 const mode = args.mode || 'story';
 const maxSim = Number(args.seconds || 900);
-const CFG = { seed: Number(args.seed || 12345), map: args.map || 'graveyard', boss: !!args.boss, overtime: !!args.overtime, character: args.character || 'warden' };
+const CFG = { seed: Number(args.seed || 12345), map: args.map || 'graveyard', boss: !!args.boss, overtime: !!args.overtime, character: args.character || 'warden', tier: args.tier || 'normal', challenge: { threat: Number(args.threat || 1), curses: (args.curses || '').split(',').filter(Boolean) } };
 (async () => {
   const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
@@ -31,12 +32,12 @@ const CFG = { seed: Number(args.seed || 12345), map: args.map || 'graveyard', bo
   page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); else if (m.text().startsWith('[bot]')) console.log(m.text()); });
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message + '\n' + (e.stack || '').split('\n').slice(0, 6).join('\n')));
   await page.goto(args.url || 'http://localhost:5173/?debug');
-  await page.evaluate((c) => { window.__seed = c.seed; window.__map = c.map; window.__bossTest = c.boss; window.__overtime = c.overtime; window.__character = c.character; }, CFG);
+  await page.evaluate((c) => { window.__seed = c.seed; window.__map = c.map; window.__bossTest = c.boss; window.__overtime = c.overtime; window.__character = c.character; window.__tier = c.tier; window.__challenge = c.challenge; }, CFG);
   await page.waitForFunction(() => window.swarmbreak, null, { timeout: 30000 });
   await page.evaluate((mode) => {
     const { ui, save } = window.swarmbreak;
     save.data.settings.unlockAll = true;
-    ui.startRun({ mode, map: (window.__map||'graveyard'), character: window.__character || 'warden', skin: 'default', seed: Number(window.__seed || 12345) });
+    ui.startRun({ mode, map: (window.__map||'graveyard'), character: window.__character || 'warden', skin: 'default', seed: Number(window.__seed || 12345), tier: window.__tier, challenge: window.__challenge });
     const g = ui.game;
     g.input.poll = () => {};
     if (window.__bossTest) {

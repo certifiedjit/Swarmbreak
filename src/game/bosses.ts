@@ -78,8 +78,8 @@ export function spawnMiniboss(g: Game, id: string, index: number, clone?: { x: n
   const [x, y] = clone ? [clone.x, clone.y] : spawnSpot(g, 230);
   const e = newEnemyBase(g, x, y);
   const spec = g.flow?.spec;
-  const hpM = spec ? spec.hpMult : endlessParams(g.endlessT).hpMult;
-  const dmgM = spec ? spec.dmgMult : endlessParams(g.endlessT).dmgMult;
+  const hpM = (spec ? spec.hpMult : endlessParams(g.endlessT).hpMult) * g.mods.hp;
+  const dmgM = (spec ? spec.dmgMult : endlessParams(g.endlessT).dmgMult) * g.mods.dmg;
   e.kind = 'mini';
   e.sprite = def.sprite;
   e.r = def.radius;
@@ -138,9 +138,9 @@ export function spawnMainBoss(g: Game, bossId: string, power: number, isMain: bo
   e.sprite = def.sprite;
   e.r = def.radius;
   const endlessHp = isMain ? 1 : 0.35 * power * Math.sqrt(endlessParams(g.endlessT).hpMult);
-  e.maxHp = e.hp = def.hp * endlessHp;
+  e.maxHp = e.hp = def.hp * endlessHp * g.mods.hp;
   e.speed = def.speed;
-  e.dmg = def.damage * (isMain ? 1.6 : 1 + 0.25 * power * Math.sqrt(endlessParams(g.endlessT).dmgMult)) * ENEMY_DAMAGE_SCALE;
+  e.dmg = def.damage * (isMain ? 1.6 : 1 + 0.25 * power * Math.sqrt(endlessParams(g.endlessT).dmgMult)) * ENEMY_DAMAGE_SCALE * g.mods.dmg;
   e.mass = 1;
   e.color = def.color;
   e.countsForMeter = false;
@@ -218,8 +218,27 @@ export function updateBosses(g: Game, dt: number): void {
     b.attackT -= dt * ts;
     const ai = (b.isMain ? MAIN_AI : MINI_AI)[b.id] ?? (b.isMain ? titanAI : mechAI);
     ai(g, e, b, dt * ts);
+    if (g.mods.bossBarrage && b.isMain) nightmareBarrage(g, e, b, dt * ts);
     syncView(g, e, dt);
   }
+}
+
+/** Nightmare tier: main bosses add a ring of telegraphed ground strikes around you every few seconds */
+function nightmareBarrage(g: Game, e: Enemy, b: BossState, dt: number): void {
+  b.barrageT = (b.barrageT ?? 6) - dt;
+  if (b.barrageT > 0) return;
+  b.barrageT = 7 - Math.min(2, b.phase);
+  const color = 0xff4d6d;
+  const n = 5 + b.phase;
+  const a0 = Math.random() * Math.PI * 2;
+  // one gap in the ring so there is always a way out
+  for (let k = 0; k < n; k++) {
+    if (k === 0) continue;
+    const a = a0 + (k / n) * Math.PI * 2;
+    strike(g, g.px + Math.cos(a) * 46, g.py + Math.sin(a) * 46, 30, 1.1, e.dmg * 0.6, color);
+  }
+  strike(g, g.px, g.py, 26, 1.3, e.dmg * 0.6, color);
+  g.ui.toast('Nightmare barrage', '#ff4d6d');
 }
 
 /** A boss left far behind sinks away and re-emerges near the player, so kiting never stalls a fight. */

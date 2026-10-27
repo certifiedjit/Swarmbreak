@@ -26,6 +26,7 @@ import type { ShopItem } from '../systems/shop';
 import { getMastery } from '../core/meta';
 import { isFillerOnly, xpToNext } from '../systems/xp';
 import { chestCostMult, freeRerollsPerLevel, spellCooldownMult } from '../systems/heroes';
+import { CURSES, NO_CHALLENGE, THREAT_RAMP, challengeKey, recordTierClear, runMods, threatStartTime, tierDef, type Challenge, type RunMods, type TierId } from '../systems/difficulty';
 import type { HeroBody } from '../render/heroArt';
 import { spawnMainBoss, spawnMiniboss, updateBosses } from './bosses';
 import { damageEnemy, killEnemy, spawnDirector, spawnEliteWave, updateEnemies, updateChains, cleanupEnemies, clearAllEnemies } from './enemies';
@@ -82,6 +83,8 @@ export interface RunResult {
   /** seconds survived in Overtime after the chapter boss (0 = ended at victory) */
   overtime: number;
   overtimeBosses: number;
+  /** tier and curses that applied (see Game.difficultyTags) */
+  tags: string[];
 }
 
 /** permanent progress awarded at the end of a run */
@@ -132,6 +135,10 @@ export interface GameOptions {
   meta?: MetaBonus;
   /** weapons that can be offered this run (default: all) */
   weaponPool?: string[];
+  /** Story difficulty tier (also scales Overtime) */
+  tier?: TierId;
+  /** Endless: starting Threat + curses. Story: what Overtime will use. */
+  challenge?: Challenge;
 }
 
 export class Game {
@@ -178,6 +185,12 @@ export class Game {
   readonly passive: HeroPassive;
   /** weapons that can be offered this run */
   readonly weaponPool: readonly string[];
+  readonly tier: TierId;
+  readonly challenge: Challenge;
+  /** difficulty multipliers for this run (tier, and curses in Endless / Overtime) */
+  mods: RunMods;
+  /** Endless starts its clock here so the HUD opens at the chosen Threat */
+  private endlessOffset = 0;
   readonly pickups: Pickups;
   readonly hazards: Hazards;
   readonly objects: WorldObjects;
@@ -261,7 +274,24 @@ export class Game {
 
   /** the clock Endless scaling reads: run time, or Overtime's shifted clock */
   get endlessT(): number {
-    return this.overtimeAt >= 0 ? this.time - this.overtimeAt + this.overtimeOffset : this.time;
+    // a raised starting Threat is reached over the first THREAT_RAMP seconds, so there is time to build
+    return this.overtimeAt >= 0 ? this.time - this.overtimeAt + this.overtimeOffset : this.time + this.endlessOffset * Math.min(1, this.time / THREAT_RAMP);
+  }
+
+  /** what is making this run harder, for the HUD and results: the tier, then active curses */
+  difficultyTags(): string[] {
+    const tags: string[] = [];
+    if (this.tier !== 'normal') tags.push(tierDef(this.tier).name);
+    const cursesOn = this.opts.mode === 'endless' || this.overtimeAt >= 0;
+    if (cursesOn && this.challenge.threat > 1) tags.push(this.opts.mode === 'endless' && this.time < THREAT_RAMP ? `Climbing to Threat ${this.challenge.threat}` : `Started at Threat ${this.challenge.threat}`);
+    if (cursesOn) for (const id of this.challenge.curses) tags.push(CURSES.find((c) => c.id === id)!.name);
+    return tags;
+  }
+
+  /** where this run's Endless best is kept: per map, and per starting Threat + curses */
+  recordKey(): string {
+    const k = challengeKey(this.challenge);
+    return k ? `${this.map.id}|${k}` : this.map.id;
   }
   private bestRecord: { time: number; kills: number } | undefined;
   private recordAnnounced = false;
@@ -290,12 +320,17 @@ export class Game {
 
     this.build = newBuild(opts.character);
     this.weaponPool = opts.weaponPool ?? ALL_WEAPON_IDS;
+    this.tier = opts.mode === 'story' ? (opts.tier ?? 'normal') : 'normal';
+    this.challenge = opts.challenge ?? NO_CHALLENGE;
+    this.mods = runMods(this.tier, opts.mode === 'endless' ? this.challenge : undefined);
+    if (opts.mode === 'endless') this.endlessOffset = threatStartTime(this.challenge.threat);
     const meta = opts.meta ?? emptyBonus();
     this.metaMods = meta.mods;
     this.rerolls += meta.rerolls;
     this.banishes += meta.banishes;
     this.skips += meta.skips;
     this.coins = meta.startCoins;
+    if (this.mods.noRerolls) this.rerolls = 0;
     this.priceMult = meta.priceMult;
     this.refreshStats();
     this.hp = this.stats.maxHp;
@@ -360,7 +395,7 @@ export class Game {
     this.objects.place();
 
     if (opts.mode === 'story') this.flow = new RoundFlow(this.map.rounds);
-    else this.bestRecord = save.data.bests[this.map.id]?.[opts.character];
+    else this.bestRecord = save.data.bests[this.recordKey()]?.[opts.character];
 
     this.weapons.sync();
     this.resize(app.screen.width, app.screen.height);
@@ -580,6 +615,7 @@ export class Game {
     if (m.kind === 'eliteWave') {
       this.ui.banner('ELITE WAVE', `Milestone ${m.index}`, '#ffe24d');
       spawnEliteWave(this, 4 + m.index, m.power);
+      if (this.mods.doubleBosses) this.spawnPastBoss(m.power);
       this.objects.spawnChest(this.px + 80, this.py, { free: true, minRarity: 1 });
     } else if (m.kind === 'cursedEvent') {
       if (m.cursed === 'darkness') {
@@ -593,9 +629,19 @@ export class Game {
       this.objects.spawnChest(this.px - 80, this.py, { free: true, minRarity: 1 });
     } else {
       // a past main boss returns, stronger: any boss from a chapter you have reached
-      const reached = MAP_ORDER.map((id) => MAPS[id]).filter((mp) => mp.available && mp.chapter <= Math.max(this.map.chapter, save.data.progress.chaptersCleared));
-      spawnMainBoss(this, this.rng.pick(reached).boss, m.power, false);
+      this.spawnPastBoss(m.power);
     }
+  }
+
+  /** a past main boss returns, stronger: any boss from a chapter you have reached */
+  private spawnPastBoss(power: number): void {
+    const reached = MAP_ORDER.map((id) => MAPS[id]).filter((mp) => mp.available && mp.chapter <= Math.max(this.map.chapter, save.data.progress.chaptersCleared));
+    spawnMainBoss(this, this.rng.pick(reached).boss, power, false);
+  }
+
+  /** seconds between Overtime's great bosses */
+  private get overtimeBossEvery(): number {
+    return this.mods.doubleBosses ? OVERTIME_BOSS_EVERY / 2 : OVERTIME_BOSS_EVERY;
   }
 
   // ------------------------------------------------------------------ overtime
@@ -605,9 +651,13 @@ export class Game {
     // find the Endless clock whose enemy HP matches the final round
     let t = 0;
     while (t < 3600 && endlessParams(t).hpMult < last.hpMult) t += 5;
-    this.overtimeOffset = t;
+    // a higher starting Threat picked for Overtime starts it further on
+    this.overtimeOffset = Math.max(t, threatStartTime(this.challenge.threat));
+    // the chapter's tier keeps scaling enemies; the Overtime curses switch on now
+    this.mods = runMods(this.tier, this.challenge);
+    if (this.mods.noRerolls) this.rerolls = 0;
     this.overtimeAt = this.time;
-    this.overtimeBossIn = OVERTIME_BOSS_EVERY * 0.6;
+    this.overtimeBossIn = this.overtimeBossEvery * 0.6;
     this.overtimeEliteDone = false;
     this.flow = null;
     this.victoryT = -1;
@@ -615,6 +665,7 @@ export class Game {
     // the clear counts now, whatever happens next
     const sd = save.data;
     sd.progress.chaptersCleared = Math.max(sd.progress.chaptersCleared, this.map.chapter);
+    sd.progress.tiers[this.map.id] = recordTierClear(sd.progress.tiers[this.map.id], this.tier);
     if (!sd.skins.unlocked.includes('sprout')) sd.skins.unlocked.push('sprout');
     save.write();
     audio.playMusic(this.map.music);
@@ -628,7 +679,7 @@ export class Game {
   private updateOvertime(dt: number): void {
     if (this.bossActive && !this.bossActive.dead && this.bossActive.kind === 'boss') return; // one at a time
     this.overtimeBossIn -= dt;
-    if (!this.overtimeEliteDone && this.overtimeBossIn < OVERTIME_BOSS_EVERY / 2) {
+    if (!this.overtimeEliteDone && this.overtimeBossIn < this.overtimeBossEvery / 2) {
       this.overtimeEliteDone = true;
       const power = 1 + 0.5 * this.overtimeBosses;
       this.ui.banner('ELITE WAVE', 'Overtime', '#ffe24d');
@@ -636,7 +687,7 @@ export class Game {
     }
     if (this.overtimeBossIn > 0) return;
     this.overtimeBosses++;
-    this.overtimeBossIn = OVERTIME_BOSS_EVERY;
+    this.overtimeBossIn = this.overtimeBossEvery;
     this.overtimeEliteDone = false;
     // this chapter's boss first, then any you've beaten, each one stronger
     const pool = MAP_ORDER.map((id) => MAPS[id]).filter((mp) => mp.available && mp.chapter <= Math.max(this.map.chapter, save.data.progress.chaptersCleared));
@@ -1106,6 +1157,7 @@ export class Game {
   freeRerolls = 0;
 
   rerollLevelUp(): Offer[] | null {
+    if (this.mods.noRerolls) return null;
     if (this.freeRerolls > 0) this.freeRerolls--;
     else if (this.rerolls > 0) this.rerolls--;
     else return null;
@@ -1387,7 +1439,7 @@ export class Game {
     if (this.opts.mode === 'endless') {
       sd.stats.longestEndless = Math.max(sd.stats.longestEndless, this.time);
       const rec = { time: this.time, kills: this.stats_.kills, date: Date.now() };
-      const bests = (sd.bests[this.map.id] ??= {});
+      const bests = (sd.bests[this.recordKey()] ??= {});
       if (beatsRecord(rec, bests[this.opts.character])) {
         newRecord = !!bests[this.opts.character] || this.time > 30;
         bests[this.opts.character] = rec;
@@ -1395,6 +1447,7 @@ export class Game {
     }
     if (won && this.opts.mode === 'story') {
       sd.progress.chaptersCleared = Math.max(sd.progress.chaptersCleared, this.map.chapter);
+      sd.progress.tiers[this.map.id] = recordTierClear(sd.progress.tiers[this.map.id], this.tier);
       if (this.map.chapter >= 1 && !sd.skins.unlocked.includes('sprout')) sd.skins.unlocked.push('sprout');
     }
     // permanent progress: mastery XP for this hero, and Star Shards from leftover coins
@@ -1405,7 +1458,8 @@ export class Game {
     addMasteryXp(mastery, masteryXp);
     // only coins earned this run convert (starting coins from upgrades don't), so quitting early can't farm shards
     const coinsLeft = Math.max(0, Math.min(this.coins, this.stats_.coinsEarned));
-    const shards = shardsForRun({ coinsLeft, kills: this.stats_.kills, won: storyWin }) + this.victoryBonus.shards;
+    // harder tiers, a higher starting Threat and curses all pay more
+    const shards = Math.round((shardsForRun({ coinsLeft, kills: this.stats_.kills, won: storyWin }) + this.victoryBonus.shards) * this.mods.shards);
     sd.meta.shards += shards;
     sd.meta.shardsEarned += shards;
     const progress: RunProgress = { masteryXp, levelBefore, levelAfter: mastery.level, shards, coinsLeft, cache: this.victoryBonus.shards ? { ...this.victoryBonus } : undefined };
@@ -1416,7 +1470,7 @@ export class Game {
       this.playerSprite.texture = this.heroTex().victory;
       audio.playMusic('victory');
     }
-    this.ui.end({ mode: this.opts.mode, map: this.map.id, character: this.opts.character, won, time: this.time, level: this.level, stats: this.stats_, newRecord, seed: this.seed, build: this.build, progress, overtime: this.overtimeAt >= 0 ? this.time - this.overtimeAt : 0, overtimeBosses: this.overtimeBosses });
+    this.ui.end({ mode: this.opts.mode, map: this.map.id, character: this.opts.character, won, time: this.time, level: this.level, stats: this.stats_, newRecord, seed: this.seed, build: this.build, progress, overtime: this.overtimeAt >= 0 ? this.time - this.overtimeAt : 0, overtimeBosses: this.overtimeBosses, tags: this.difficultyTags() });
   }
 
   quit(): void {

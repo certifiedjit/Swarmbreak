@@ -24,6 +24,7 @@ export class Pickups {
 
   drop(kind: PickupKind, x: number, y: number, value: number, vx?: number, vy?: number): void {
     const g = this.g;
+    if (kind === 'food' && g.mods.noFood) return;
     if (kind === 'gem' && this.list.length >= MAX_PICKUPS) {
       // merge into a random existing gem instead of adding another
       for (let tries = 0; tries < 6; tries++) {

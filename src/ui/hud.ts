@@ -27,6 +27,9 @@ export class Hud {
   private kills: HTMLElement;
   private time: HTMLElement;
   private modeLabel: HTMLElement;
+  /** tier + active curses */
+  private tags: HTMLElement;
+  private tagSig = '';
   private meterFill: HTMLElement;
   private meterText: HTMLElement;
   private meterWrap: HTMLElement;
@@ -73,6 +76,7 @@ export class Hud {
     this.meterText = h('div', { class: 'meter-text' });
     this.meterWrap = h('div', { class: 'meter' }, this.meterFill, this.meterText);
     this.threat = h('div', { class: 'threat' });
+    this.tags = h('div', { class: 'hud-tags' });
     this.best = h('div', { class: 'best' });
     this.bossName = h('div', { class: 'boss-name' });
     this.bossTitle = h('div', { class: 'boss-title' });
@@ -109,7 +113,7 @@ export class Hud {
           h('div', { class: 'hp' }, this.hpLag, this.hpFill, this.hpText),
           h('div', { class: 'hud-counts' }, this.lvl, h('span', { class: 'cnt coin' }, h('img', { class: 'px', src: a.icons.i_coin, alt: '' }), this.coins), h('span', { class: 'cnt' }, h('img', { class: 'px', src: a.icons.i_skull, alt: '' }), this.kills)),
         ),
-        h('div', { class: 'hud-center' }, this.modeLabel, this.meterWrap, this.threat),
+        h('div', { class: 'hud-center' }, this.modeLabel, this.meterWrap, this.threat, this.tags),
         h('div', { class: 'hud-right' }, this.time, this.best, pause),
       ),
       this.bossWrap,
@@ -155,6 +159,12 @@ export class Hud {
   }
 
   update(g: Game, dt: number): void {
+    const tags = g.difficultyTags();
+    const sig = tags.join('|');
+    if (sig !== this.tagSig) {
+      this.tagSig = sig;
+      this.tags.replaceChildren(...tags.map((t) => h('span', null, t)));
+    }
     // fps
     this.fpsAcc += dt;
     this.fpsN++;
@@ -228,7 +238,7 @@ export class Hud {
         void this.threat.offsetWidth;
         this.threat.classList.add('tick');
       }
-      const rec = ot ? undefined : save.data.bests[g.map.id]?.[g.opts.character];
+      const rec = ot ? undefined : save.data.bests[g.recordKey()]?.[g.opts.character];
       this.best.classList.toggle('hidden', !rec);
       if (rec) setText(this.best, g.newRecord ? 'NEW RECORD' : `Best ${formatTime(rec.time)}`);
       this.best.classList.toggle('record', g.newRecord);
