@@ -5,6 +5,8 @@
 import { OUTLINE, Pix, noise2, shade } from './pixel';
 import { CATHEDRAL_ENEMY_DRAW, drawOrgan } from './cathedralArt';
 import { BLACK_SUN_ENEMY_DRAW, drawHeart } from './blackSunArt';
+import { ARCHIVE_ENEMY_DRAW, drawLibrarian } from './archiveArt';
+import { HIVE_ENEMY_DRAW, drawSwarmMind } from './hiveArt';
 
 type Draw = (frame: number) => Pix;
 
@@ -326,11 +328,11 @@ export function drawTitan(frame: number, cracked: boolean): Pix {
   return p;
 }
 
-export const ENEMY_DRAW: Record<string, Draw> = { crawler, drone, voidspawn, signal, volatile, mortar, hulk, mech, queen, ...CATHEDRAL_ENEMY_DRAW, ...BLACK_SUN_ENEMY_DRAW };
+export const ENEMY_DRAW: Record<string, Draw> = { crawler, drone, voidspawn, signal, volatile, mortar, hulk, mech, queen, ...CATHEDRAL_ENEMY_DRAW, ...BLACK_SUN_ENEMY_DRAW, ...ARCHIVE_ENEMY_DRAW, ...HIVE_ENEMY_DRAW };
 
 /** main bosses: sprite id -> draw(frame, cracked) */
-export const BOSS_DRAW: Record<string, (frame: number, cracked: boolean) => Pix> = { titan: drawTitan, organ: drawOrgan, heart: drawHeart };
+export const BOSS_DRAW: Record<string, (frame: number, cracked: boolean) => Pix> = { titan: drawTitan, organ: drawOrgan, heart: drawHeart, librarian: drawLibrarian, swarmmind: drawSwarmMind };
 
 /** big sprites get a coarser death-ember sample */
-export const BIG_SPRITES = new Set(['mech', 'queen', 'priest', 'gargoyle', 'hound', 'colossus', 'eater']);
+export const BIG_SPRITES = new Set(['mech', 'queen', 'priest', 'gargoyle', 'hound', 'colossus', 'eater', 'tomegolem', 'archivist', 'wyrm', 'hiveknight', 'larva', 'hivenode']);
 export const ENEMY_FRAMES = 2;

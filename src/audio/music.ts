@@ -27,6 +27,10 @@ export const TRACKS: Record<string, TrackDef> = {
   boss_organ: { bpm: 132, root: 48, chords: [[0, 'm'], [-4, 'M'], [1, 'M'], [-5, 'M']], style: 'boss', base: 0.8, lead: 'organ' },
   blacksun: { bpm: 92, root: 45, chords: [[0, 'm'], [1, 'M'], [-2, 'm'], [-1, 'M']], style: 'void', base: 0.3 },
   boss_heart: { bpm: 146, root: 45, chords: [[0, 'm'], [1, 'M'], [6, 'M'], [1, 'M']], style: 'boss', base: 0.85, lead: 'bell' },
+  archive: { bpm: 86, root: 52, chords: [[0, 'm'], [-5, 'M'], [3, 'M'], [-2, 'M']], style: 'hymn', base: 0.25 },
+  boss_librarian: { bpm: 136, root: 52, chords: [[0, 'm'], [1, 'M'], [-4, 'M'], [-5, 'M']], style: 'boss', base: 0.8, lead: 'bell' },
+  hive: { bpm: 108, root: 43, chords: [[0, 'm'], [1, 'M'], [0, 'm'], [-3, 'M']], style: 'void', base: 0.35 },
+  boss_mind: { bpm: 150, root: 43, chords: [[0, 'm'], [6, 'M'], [1, 'M'], [0, 'm']], style: 'boss', base: 0.9, lead: 'organ' },
   ending: { bpm: 70, root: 52, chords: [[0, 'M'], [-3, 'm'], [5, 'M'], [-5, 'M']], style: 'ambient', base: 0.15 },
 };
 

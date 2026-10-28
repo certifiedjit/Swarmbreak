@@ -90,7 +90,7 @@ button:focus { outline: none; }
 body.touch .menu-foot:not(.dim) { display: none; }
 
 /* story / endless select */
-.chapters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.chapters { display: grid; grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); gap: 8px; }
 .chapter { text-align: left; background: var(--panel-2); border: 2px solid var(--line); border-radius: 4px; padding: 12px; color: var(--text); cursor: pointer; font-family: var(--body); position: relative; overflow: hidden; }
 .chapter::after { content: ''; position: absolute; inset: auto 0 0 0; height: 3px; background: var(--c); opacity: 0.4; }
 .chapter.sel { border-color: var(--c); box-shadow: 0 0 24px color-mix(in srgb, var(--c) 30%, transparent); }

@@ -138,7 +138,8 @@ export class Weapons {
 
   update(dt: number): void {
     this.healBudget = Math.min(8, this.healBudget + dt * 4);
-    for (const w of this.list) {
+    // inside the Librarian's circle of silence no weapon fires (shots already in flight carry on)
+    if (!this.g.silenced) for (const w of this.list) {
       if (w.def.kind === 'orbit') {
         this.updateOrbit(w, dt);
         continue;

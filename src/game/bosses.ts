@@ -20,6 +20,7 @@ import { TAU, clamp } from '../core/math';
 import { save } from '../core/save';
 import { BOSSES, ELITE_MODS, ENEMY_DAMAGE_SCALE, MINIBOSSES } from '../data/enemies';
 import { bossTitle, eliteName } from '../data/names';
+import { SPELLS } from '../data/spells';
 import { endlessParams } from '../systems/endless';
 import { newEnemyBase, spawnEnemy } from './enemies';
 import type { Game } from './game';
@@ -150,12 +151,12 @@ export function spawnMainBoss(g: Game, bossId: string, power: number, isMain: bo
     id: def.id, name: def.name, title, isMain: true, phase: 0, attackT: INTRO_TIME + 1.5, attackIdx: 0, addsT: 6, spiralT: 0, spiralAng: 0,
     spiralArms: 0, sprite, glow: e.view!.children[1] as Sprite, shadow: e.view!.children[0] as Sprite, shieldGfx: null, power, spawnedAt: g.time, miniIndex: -1,
   };
-  if (def.id === 'heart_black_sun') {
+  if (def.id === 'heart_black_sun' || def.id === 'swarm_mind') {
     // the guard ring shown while its shards hold
     const sh = new Sprite(g.a.soft.ring_thick);
     sh.anchor.set(0.5);
     sh.blendMode = 'add';
-    sh.tint = 0xc9a8ff;
+    sh.tint = def.id === 'swarm_mind' ? 0xff9ab0 : 0xc9a8ff;
     sh.scale.set((e.r * 2.9) / 128);
     sh.visible = false;
     e.view!.addChild(sh);
@@ -193,6 +194,8 @@ function intro(g: Game, e: Enemy, color: number, main: boolean): void {
 
 export function updateBosses(g: Game, dt: number): void {
   g.eclipseR = 0;
+  // the Swarm Mind's arena only stands while it does
+  if (g.arena && !g.enemies.some((o) => !o.dead && o.boss?.id === 'swarm_mind')) g.arena = null;
   for (const e of g.enemies) {
     if (e.dead || !e.boss) continue;
     const b = e.boss;
@@ -1114,8 +1117,443 @@ function killEnemyQuiet(g: Game, m: Enemy): void {
   m.dead = true; // cleanupEnemies recycles it
 }
 
-const MAIN_AI: Record<string, (g: Game, e: Enemy, b: BossState, dt: number) => void> = { star_titan: titanAI, organ_beast: organAI, heart_black_sun: heartAI };
-const MINI_AI: Record<string, (g: Game, e: Enemy, b: BossState, dt: number) => void> = { rogue_mech: mechAI, swarm_queen: queenAI, high_priest: priestAI, gargoyle: gargoyleAI, void_hound: houndAI, crystal_colossus: colossusAI };
+// ---------------------------------------------------------------- The Archivist (regenerates; reads your last spell back at you)
+
+function archivistAI(g: Game, e: Enemy, b: BossState, dt: number): void {
+  const [nx, ny, d] = toPlayer(g, e);
+  // a lectern's distance, drifting sideways; slowly rebinds its own pages
+  const radial = d > 160 ? 1 : d < 110 ? -1 : 0;
+  e.x += (nx * radial * e.speed - ny * e.speed * 0.55) * dt;
+  e.y += (ny * radial * e.speed + nx * e.speed * 0.55) * dt;
+  e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.006 * dt);
+  if (b.attackT > 0) return;
+  b.attackIdx++;
+  const ang = Math.atan2(ny, nx);
+  const dmg = e.dmg;
+  const spell = g.lastSpell;
+  if (b.attackIdx % 2 === 0 && spell) {
+    const name = SPELLS[spell]?.name ?? 'your spell';
+    g.ui.toast(`${b.name} reads your ${name} back at you`, '#7ab8ff');
+    audio.play('curse', { vol: 0.5, pitch: 1.2 });
+    switch (SPELLS[spell]?.kind) {
+      case 'dash': {
+        const len = Math.min(320, d + 80);
+        g.telegraph({
+          kind: 'line', x: e.x, y: e.y, r: 0, ang, len, w: 34, dur: 0.85, color: 0x7ab8ff,
+          onDone: () => {
+            if (e.dead) return;
+            const c = Math.cos(ang), s = Math.sin(ang);
+            const dx = g.px - e.x, dy = g.py - e.y;
+            const along = dx * c + dy * s, across = Math.abs(-dx * s + dy * c);
+            if (along > 0 && along < len && across < 24) g.hurt(dmg * 1.2, null);
+            g.fx.spawn('soft', g.a.soft.beam, e.x + (c * len) / 2, e.y + (s * len) / 2, { rot: ang, s0: len / 64, scaleY: 0.5, life: 0.3, tint: 0xcff0ff, force: true });
+            e.x += c * len;
+            e.y += s * len;
+          },
+        });
+        break;
+      }
+      case 'nova':
+        strike(g, e.x, e.y, 120, 1.1, dmg * 1.1, 0x7ab8ff, () => !e.dead && ring(g, e.x, e.y, 18, 110, dmg * 0.4, Math.random(), false, 0xcff0ff));
+        break;
+      case 'timeSlow': {
+        const cx = g.px, cy = g.py;
+        g.telegraph({
+          kind: 'circle', x: cx, y: cy, r: 90, ang: 0, len: 0, w: 0, dur: 1.1, color: 0x9b7bff,
+          onDone: () => {
+            if ((g.px - cx) ** 2 + (g.py - cy) ** 2 < 96 * 96 && !g.playerDead) g.chillT = 2.6;
+          },
+        });
+        break;
+      }
+      case 'heal':
+        e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.08);
+        g.fx.ring(e.x, e.y, 10, 70, 0x7dff8a, 0.5);
+        g.fx.embers(e.x, e.y, 0x7dff8a, 14, 60, 1);
+        break;
+      case 'magnet': {
+        // the gems you would have pulled in, as shards closing on you
+        const cx = g.px, cy = g.py;
+        g.telegraph({
+          kind: 'ring', x: cx, y: cy, r: 200, ang: 0, len: 0, w: 0, dur: 1, color: 0x7ab8ff,
+          onDone: () => {
+            if (e.dead) return;
+            for (let k = 0; k < 14; k++) {
+              const a = (k / 14) * TAU;
+              if (k === 0 || k === 7) continue; // two gaps to slip out through
+              g.fireBullet(cx + Math.cos(a) * 200, cy + Math.sin(a) * 200, a + Math.PI, 95, dmg * 0.5, false, 0xcff0ff);
+            }
+          },
+        });
+        break;
+      }
+      default: {
+        const hp = g.flow ? g.flow.spec.hpMult : endlessParams(g.endlessT).hpMult;
+        for (let k = 0; k < 6; k++) spawnEnemy(g, 'page_wraith', e.x + Math.cos(k) * 50, e.y + Math.sin(k) * 50, { hpMult: hp * g.mods.hp, countsForMeter: false });
+        g.fx.ring(e.x, e.y, 8, 70, 0x7ab8ff, 0.5, 1, true);
+      }
+    }
+    b.attackT = 2.6;
+  } else {
+    g.telegraph({ kind: 'ring', x: e.x, y: e.y, r: 26, ang: 0, len: 0, w: 0, dur: 0.6, color: 0x7ab8ff, onDone: () => !e.dead && fan(g, e.x, e.y, ang, 5 + b.miniIndex, 0.9, 130, dmg * 0.55, false, 0xf4ecd8) });
+    audio.play('warn', { vol: 0.5 });
+    b.attackT = 1.9;
+  }
+}
+
+// ---------------------------------------------------------------- The Ice Wyrm (fast: burrows under the snow)
+
+function wyrmAI(g: Game, e: Enemy, b: BossState, dt: number): void {
+  e.stateT -= dt;
+  if (e.state === 1) {
+    // burrowed: untouchable, a bulge in the snow racing toward you
+    e.shield = 0.05;
+    e.view!.alpha = 0.12;
+    const [nx, ny] = toPlayer(g, e);
+    e.x += nx * e.speed * 2.2 * dt;
+    e.y += ny * e.speed * 2.2 * dt;
+    if (Math.random() < 0.5) g.fx.puff(e.x, e.y + 8, 0xeaf6ff, 16, 0.5, 0, -12, 0.35);
+    if (e.stateT <= 0) {
+      e.state = 2;
+      const tx = g.px + g.pvx * 0.3, ty = g.py + g.pvy * 0.3;
+      e.ax = tx;
+      e.ay = ty;
+      strike(g, tx, ty, 58, 1.0, e.dmg * 1.3, 0x9fe8ff, () => {
+        e.x = e.ax;
+        e.y = e.ay;
+        e.state = 0;
+        e.view!.alpha = 1;
+        ring(g, e.x, e.y, 12 + b.miniIndex * 2, 115, e.dmg * 0.45, Math.random(), false, 0xd6f6ff, 2);
+        g.fx.puff(e.x, e.y, 0xeaf6ff, 50, 0.7, 0, -20, 0.6);
+        audio.play('slam', { vol: 0.7, pitch: 0.8 });
+      });
+    }
+    return;
+  }
+  if (e.state === 2) {
+    e.shield = 0.05;
+    return; // about to erupt
+  }
+  e.view!.alpha = 1;
+  chase(g, e, dt, 1, 90);
+  if (b.attackT > 0) return;
+  b.attackIdx++;
+  const [nx, ny] = toPlayer(g, e);
+  const ang = Math.atan2(ny, nx);
+  if (b.attackIdx % 3 === 0) {
+    e.state = 1;
+    e.stateT = 1.5;
+    g.fx.puff(e.x, e.y, 0xeaf6ff, 40, 0.6, 0, -10, 0.5);
+    audio.play('dash', { pitch: 0.5 });
+    g.ui.toast('It dives under the snow — watch the ground', '#9fe8ff');
+    b.attackT = 3.4;
+  } else {
+    // frost breath: a cone of shards
+    g.telegraph({ kind: 'ring', x: e.x, y: e.y, r: 24, ang: 0, len: 0, w: 0, dur: 0.6, color: 0x9fe8ff, onDone: () => !e.dead && fan(g, e.x, e.y, ang, 7 + b.miniIndex, 0.8, 150, e.dmg * 0.5, false, 0xd6f6ff) });
+    audio.play('warn', { vol: 0.5 });
+    b.attackT = 1.7;
+  }
+}
+
+// ---------------------------------------------------------------- The Hive Knight (shielded: carapace, charges, spear sweeps)
+
+function hiveKnightAI(g: Game, e: Enemy, b: BossState, dt: number): void {
+  e.stateT -= dt;
+  b.addsT -= dt;
+  if (b.addsT <= 0 && e.state === 0) {
+    b.addsT = 8;
+    e.shield = 2.4;
+    g.fx.ring(e.x, e.y, e.r * 2.6, e.r * 1.6, 0xffc070, 0.35);
+    g.ui.toast(`${b.name} hardens its carapace — wait it out`, '#ffc070');
+  }
+  if (e.state === 1) {
+    if (e.stateT <= 0) {
+      e.state = 2;
+      e.stateT = 0.6;
+    }
+    return;
+  }
+  if (e.state === 2) {
+    e.x += e.ax * 440 * dt;
+    e.y += e.ay * 440 * dt;
+    if (Math.random() < 0.4) g.fx.puff(e.x, e.y + 10, 0x5a3a2a, 14, 0.3, 0, 0, 0.3);
+    if (e.stateT <= 0) e.state = 0;
+    return;
+  }
+  chase(g, e, dt, 1, 70);
+  if (b.attackT > 0) return;
+  b.attackIdx++;
+  const [nx, ny] = toPlayer(g, e);
+  const ang = Math.atan2(ny, nx);
+  if (b.attackIdx % 2 === 0) {
+    e.state = 1;
+    e.stateT = 0.9;
+    e.ax = nx;
+    e.ay = ny;
+    g.telegraph({ kind: 'line', x: e.x, y: e.y, r: 0, ang, len: 280, w: e.r * 2 + 10, dur: 0.9, color: 0xffa040 });
+    audio.play('warn', { vol: 0.6 });
+    b.attackT = 2.4;
+  } else {
+    // a spear sweep: three short lines fanning toward you
+    const len = 170, w = 22, x0 = e.x, y0 = e.y;
+    const tgs = [-0.5, 0, 0.5].map((o) => g.telegraph({ kind: 'line', x: x0, y: y0, r: 0, ang: ang + o, len, w, dur: 0.75, color: 0xffc070 }));
+    tgs[1].onDone = () => {
+      if (e.dead) return;
+      for (const tg of tgs) {
+        const c = Math.cos(tg.ang), s = Math.sin(tg.ang);
+        const dx = g.px - x0, dy = g.py - y0;
+        const along = dx * c + dy * s, across = Math.abs(-dx * s + dy * c);
+        if (along > 0 && along < len && across < w / 2 + 6) {
+          g.hurt(e.dmg * 0.9, null);
+          break;
+        }
+      }
+      fan(g, x0, y0, ang, 3 + b.miniIndex, 0.9, 140, e.dmg * 0.4, false, 0xffd8a0);
+      audio.play('slam', { vol: 0.6, pitch: 1.2 });
+    };
+    b.attackT = 2;
+  }
+}
+
+// ---------------------------------------------------------------- The Twin Larvae (splits: always two; the survivor goes frantic)
+
+function larvaAI(g: Game, e: Enemy, b: BossState, dt: number): void {
+  if (!b.split) {
+    b.split = true;
+    const [nx, ny] = toPlayer(g, e);
+    const twin = spawnMiniboss(g, b.id, b.miniIndex, { x: e.x + ny * 70, y: e.y - nx * 70, hp: e.hp, maxHp: e.maxHp, name: b.name });
+    twin.boss!.split = true;
+    twin.boss!.attackT = b.attackT + 1.1;
+    g.ui.banner('TWO OF THEM', 'Break both larvae', '#a0d040');
+  }
+  const alone = !g.enemies.some((o) => o !== e && !o.dead && o.boss?.id === b.id);
+  if (alone && !e.state) {
+    e.state = 1;
+    e.speed *= 1.6;
+    g.fx.ring(e.x, e.y, 10, 120, 0xa0d040, 0.5, 1, true);
+    g.ui.toast('The surviving larva goes frantic!', '#a0d040');
+  }
+  chase(g, e, dt, 1, 60);
+  if (b.attackT > 0) return;
+  b.attackIdx++;
+  const dmg = e.dmg;
+  // spit acid where you are heading
+  const n = alone ? 3 : 2;
+  for (let k = 0; k < n; k++) {
+    const tx = g.px + g.pvx * (0.3 + k * 0.25) + (Math.random() - 0.5) * 40, ty = g.py + g.pvy * (0.3 + k * 0.25) + (Math.random() - 0.5) * 40;
+    strike(g, tx, ty, 30, 0.9 + k * 0.2, dmg, 0x9aff3d, () => g.hazards.addField('acid', tx, ty, 30, 4, dmg * 0.45));
+  }
+  audio.play('warn', { vol: 0.5, pitch: 1.3 });
+  b.attackT = alone ? 1.5 : 2.6;
+}
+
+// ---------------------------------------------------------------- The Librarian of Silence
+
+function librarianAI(g: Game, e: Enemy, b: BossState, dt: number): void {
+  checkPhase(g, e, b, ['THE STACKS COLLAPSE', 'ABSOLUTE SILENCE']);
+  const p = b.phase;
+  const dmg = e.dmg;
+  const tint = 0xf4ecd8;
+  chase(g, e, dt, 1, 170);
+  const mx = e.x, my = e.y - 8;
+  // page storm: counter-rotating spirals of torn pages
+  if (b.spiralT > 0) {
+    b.spiralT -= dt;
+    e.aux -= dt;
+    if (e.aux <= 0) {
+      e.aux = p >= 2 ? 0.12 : 0.16;
+      b.spiralAng += 0.33;
+      for (let k = 0; k < b.spiralArms; k++) g.fireBullet(mx, my, b.spiralAng + (k / b.spiralArms) * TAU, 88, dmg * 0.4, false, tint);
+    }
+  }
+  if (p >= 1) {
+    b.addsT -= dt;
+    if (b.addsT <= 0) {
+      b.addsT = p >= 2 ? 8 : 10;
+      const hp = (g.flow ? g.flow.spec.hpMult : endlessParams(g.endlessT).hpMult) * g.mods.hp;
+      for (let k = 0; k < 2; k++) spawnEnemy(g, 'frost_scribe', e.x + Math.cos(k * 3) * 90, e.y + Math.sin(k * 3) * 90, { hpMult: hp, countsForMeter: false });
+      for (let k = 0; k < 6; k++) spawnEnemy(g, 'page_wraith', e.x + Math.cos(k) * 60, e.y + Math.sin(k) * 60, { hpMult: hp, countsForMeter: false });
+      g.ui.toast('The stacks stir — pages take flight', '#7ab8ff');
+    }
+  }
+  if (b.attackT > 0) return;
+  b.attackIdx++;
+  const patterns = p === 0 ? ['silence', 'storm', 'shelves', 'fan'] : p === 1 ? ['silence', 'shelves', 'storm', 'grid', 'fan'] : ['silence2', 'grid', 'storm', 'shelves', 'silence', 'fan'];
+  const pat = patterns[b.attackIdx % patterns.length];
+  const [nx, ny] = toPlayer(g, e);
+  const ang = Math.atan2(ny, nx);
+  switch (pat) {
+    case 'silence':
+    case 'silence2': {
+      // circles where your weapons fall quiet
+      const n = pat === 'silence2' ? 2 : 1;
+      for (let k = 0; k < n; k++) {
+        const x = g.px + g.pvx * 0.4 + (k ? (Math.random() - 0.5) * 220 : 0), y = g.py + g.pvy * 0.4 + (k ? (Math.random() - 0.5) * 220 : 0);
+        const r = 95 + p * 10;
+        g.telegraph({ kind: 'circle', x, y, r, ang: 0, len: 0, w: 0, dur: 1.2, color: 0x5a6ad0, onDone: () => !e.dead && g.silenceZones.push({ x, y, r, t: 5 + p, max: 5 + p }) });
+      }
+      g.ui.toast('A circle of silence — your weapons stop inside it', '#9fb0ff');
+      audio.play('warn', { vol: 0.6, pitch: 0.6 });
+      b.attackT = 2.4;
+      break;
+    }
+    case 'storm':
+      g.telegraph({ kind: 'ring', x: mx, y: my, r: 60, ang: 0, len: 0, w: 0, dur: 0.8, color: 0xf4ecd8 });
+      b.spiralArms = p >= 2 ? 5 : 4;
+      setTimeoutTick(g, 0.8, () => {
+        b.spiralT = 3;
+        e.aux = 0;
+      });
+      audio.play('warn', { vol: 0.6 });
+      b.attackT = 4.2;
+      break;
+    case 'shelves':
+    case 'grid': {
+      // shelves topple in marked lines across where you stand
+      const lines: { x: number; y: number; a: number }[] = [];
+      const a0 = Math.random() * Math.PI;
+      const offs = pat === 'grid' ? [-70, 70] : [-110, 0, 110];
+      for (const o of offs) lines.push({ x: g.px - Math.sin(a0) * o, y: g.py + Math.cos(a0) * o, a: a0 });
+      if (pat === 'grid') for (const o of [-70, 70]) lines.push({ x: g.px - Math.sin(a0 + Math.PI / 2) * o, y: g.py + Math.cos(a0 + Math.PI / 2) * o, a: a0 + Math.PI / 2 });
+      const len = 560, w = 34;
+      lines.forEach((l, i) => {
+        const sx = l.x - (Math.cos(l.a) * len) / 2, sy = l.y - (Math.sin(l.a) * len) / 2;
+        g.telegraph({
+          kind: 'line', x: sx, y: sy, r: 0, ang: l.a, len, w, dur: 1.15 + (pat === 'grid' && i >= 2 ? 0.5 : 0), color: 0x9fb0ff,
+          onDone: () => {
+            if (e.dead) return;
+            const c = Math.cos(l.a), s = Math.sin(l.a);
+            const dx = g.px - sx, dy = g.py - sy;
+            const along = dx * c + dy * s, across = Math.abs(-dx * s + dy * c);
+            if (along > 0 && along < len && across < w / 2 + 6) g.hurt(dmg * 1.2, null);
+            for (let t = 0; t < 8; t++) g.fx.puff(sx + c * len * (t / 8), sy + s * len * (t / 8), 0xcfd8e8, 18, 0.4, 0, -10, 0.4);
+            audio.play('slam', { vol: 0.5, pitch: 0.7 + i * 0.1 });
+          },
+        });
+      });
+      audio.play('warn', { vol: 0.7 });
+      b.attackT = pat === 'grid' ? 2.9 : 2.4;
+      break;
+    }
+    case 'fan':
+      g.telegraph({ kind: 'ring', x: mx, y: my, r: 30, ang: 0, len: 0, w: 0, dur: 0.6, color: 0xf4ecd8, onDone: () => !e.dead && fan(g, mx, my, ang, 9, 1.3, 125, dmg * 0.5, true, tint) });
+      audio.play('warn', { vol: 0.5 });
+      b.attackT = 1.9;
+      break;
+  }
+  if (p >= 2) b.attackT *= 0.85;
+}
+
+// ---------------------------------------------------------------- The Swarm Mind
+
+function mindNodes(g: Game, e: Enemy, b: BossState): void {
+  const n = 3 + b.phase;
+  const hpM = (b.power || 1) * (g.flow ? 1.7 : 1.2 * Math.sqrt(endlessParams(g.endlessT).hpMult)) * g.mods.hp;
+  b.minions = [];
+  for (let k = 0; k < n; k++) {
+    const a = (k / n) * TAU + Math.random() * 0.5;
+    const x = clamp(e.x + Math.cos(a) * 190, 60, g.map.width - 60), y = clamp(e.y + Math.sin(a) * 160, 60, g.map.height - 60);
+    const s = spawnEnemy(g, 'hive_node', x, y, { hpMult: hpM, countsForMeter: false });
+    s.mass = 1;
+    s.xp = 3;
+    b.minions.push(s);
+    g.fx.ring(x, y, 4, 40, 0xff6a8a, 0.4);
+  }
+  audio.play('magnet', { vol: 0.6, pitch: 0.6 });
+}
+
+function swarmMindAI(g: Game, e: Enemy, b: BossState, dt: number): void {
+  if (checkPhase(g, e, b, ['THE SWARM AWAKENS', 'THE HIVE CLOSES IN'])) {
+    for (const m of b.minions ?? []) if (!m.dead) killEnemyQuiet(g, m);
+    mindNodes(g, e, b);
+    b.addsT = 1;
+    if (b.phase >= 2 && b.isMain) {
+      g.arena = { x: e.x, y: e.y, r: 640, to: 300 };
+      g.ui.banner('THE HIVE CLOSES IN', 'Stay inside the ring', '#ff6a8a');
+    }
+  }
+  if (!b.minions) {
+    mindNodes(g, e, b);
+    g.ui.toast('Break the armoured nodes to expose the Mind!', '#ff6a8a');
+  }
+  const p = b.phase;
+  const dmg = e.dmg;
+  const alive = b.minions!.filter((m) => !m.dead);
+  b.guard = alive.length ? 0.25 : 1;
+  if (b.shieldGfx) b.shieldGfx.visible = alive.length > 0;
+  // nerve tethers from each node to the Mind
+  e.aux -= dt;
+  if (e.aux <= 0 && alive.length) {
+    e.aux = 0.18;
+    for (const m of alive) g.bolt([m.x, m.y, (m.x + e.x) / 2 + (Math.random() - 0.5) * 20, (m.y + e.y) / 2 + (Math.random() - 0.5) * 20, e.x, e.y], 0xff6a8a, 0.12, 1.2);
+  }
+  if (!alive.length) {
+    b.spiralT += dt;
+    if (b.spiralT > 12 - p * 1.5) {
+      b.spiralT = 0;
+      mindNodes(g, e, b);
+    } else if (b.spiralT < 0.1) g.ui.toast('The Mind is exposed — strike now!', '#ffb36b');
+  }
+  // the final phase keeps it at the heart of its shrinking arena
+  if (g.arena) chase(g, e, dt, 0.4, 260);
+  else chase(g, e, dt, 1, 220);
+  // waves of the swarm, called around you (marked first)
+  b.addsT -= dt;
+  if (b.addsT <= 0) {
+    b.addsT = p >= 2 ? 7 : p >= 1 ? 8.5 : 10;
+    const cx = g.px, cy = g.py;
+    g.telegraph({
+      kind: 'ring', x: cx, y: cy, r: 190, ang: 0, len: 0, w: 0, dur: 1.1, color: 0xa0d040,
+      onDone: () => {
+        if (e.dead) return;
+        const hp = (g.flow ? g.flow.spec.hpMult : endlessParams(g.endlessT).hpMult) * g.mods.hp;
+        const n = 12 + p * 4;
+        for (let k = 0; k < n; k++) {
+          const a = (k / n) * TAU;
+          spawnEnemy(g, k % 4 === 0 ? 'hive_drone' : 'broodling', cx + Math.cos(a) * 200, cy + Math.sin(a) * 200, { hpMult: hp, countsForMeter: false });
+        }
+      },
+    });
+    g.ui.toast('The Mind calls the swarm', '#a0d040');
+  }
+  if (b.attackT > 0) return;
+  b.attackIdx++;
+  const patterns = p === 0 ? ['spit', 'spines', 'lash'] : p === 1 ? ['spit', 'lash', 'spines', 'spit'] : ['spines', 'lash', 'spit', 'lash'];
+  const pat = patterns[b.attackIdx % patterns.length];
+  const [nx, ny] = toPlayer(g, e);
+  const ang = Math.atan2(ny, nx);
+  if (pat === 'spit') {
+    for (let k = 0; k < 3 + p; k++) {
+      const tx = g.px + g.pvx * 0.35 * k + (Math.random() - 0.5) * 70, ty = g.py + g.pvy * 0.35 * k + (Math.random() - 0.5) * 70;
+      strike(g, tx, ty, 34, 1 + k * 0.2, dmg, 0x9aff3d, () => g.hazards.addField('acid', tx, ty, 34, 4, dmg * 0.4));
+    }
+    b.attackT = 2.4;
+  } else if (pat === 'spines') {
+    g.telegraph({ kind: 'ring', x: e.x, y: e.y, r: 80, ang: 0, len: 0, w: 0, dur: 0.85, color: 0xff6a8a, onDone: () => !e.dead && ring(g, e.x, e.y, 36 + p * 6, 100, dmg * 0.45, ang + Math.PI, false, 0xffb0c0, 5) });
+    b.attackT = 2.2;
+  } else {
+    // tendrils lash out along marked lines
+    const len = 520, w = 28;
+    const tgs = [-0.3, 0.3].concat(p >= 2 ? [0] : []).map((o) => g.telegraph({ kind: 'line', x: e.x, y: e.y, r: 0, ang: ang + o, len, w, dur: 1, color: 0xff6a8a }));
+    tgs[0].onDone = () => {
+      if (e.dead) return;
+      for (const tg of tgs) {
+        const c = Math.cos(tg.ang), s = Math.sin(tg.ang);
+        g.fx.spawn('soft', g.a.soft.beam, tg.x + (c * len) / 2, tg.y + (s * len) / 2, { rot: tg.ang, s0: len / 64, scaleY: (w / 24) / (len / 64), life: 0.3, tint: 0xff9ab0, force: true });
+        const dx = g.px - tg.x, dy = g.py - tg.y;
+        const along = dx * c + dy * s, across = Math.abs(-dx * s + dy * c);
+        if (along > 0 && along < len && across < w / 2 + 6) g.hurt(dmg * 1.3, null);
+      }
+      audio.play('slam', { vol: 0.6 });
+    };
+    audio.play('warn', { vol: 0.7 });
+    b.attackT = 2.3;
+  }
+  if (p >= 2) b.attackT *= 0.85;
+}
+
+const MAIN_AI: Record<string, (g: Game, e: Enemy, b: BossState, dt: number) => void> = { star_titan: titanAI, organ_beast: organAI, heart_black_sun: heartAI, librarian: librarianAI, swarm_mind: swarmMindAI };
+const MINI_AI: Record<string, (g: Game, e: Enemy, b: BossState, dt: number) => void> = { rogue_mech: mechAI, swarm_queen: queenAI, high_priest: priestAI, gargoyle: gargoyleAI, void_hound: houndAI, crystal_colossus: colossusAI, archivist: archivistAI, ice_wyrm: wyrmAI, hive_knight: hiveKnightAI, twin_larva: larvaAI };
 
 /** schedule a callback on the simulation clock (pauses with the game) */
 function setTimeoutTick(g: Game, delay: number, fn: () => void): void {

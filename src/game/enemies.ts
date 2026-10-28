@@ -373,7 +373,123 @@ export function updateEnemies(g: Game, dt: number): void {
         }
         break;
       case 'orbiter':
-        break; // placed each frame by its boss
+      case 'node':
+        break; // placed by its boss / rooted in place
+      case 'diver':
+        // circle you in a loose flock, then mark a line and dive along it
+        e.stateT -= dt * ts;
+        if (e.state === 0) {
+          const a = Math.atan2(-dy, -dx) + 0.9;
+          const want = 130 + (e.uid % 5) * 8;
+          const tx = g.px + Math.cos(a) * want, ty = g.py + Math.sin(a) * want;
+          const tdx = tx - e.x, tdy = ty - e.y, td = Math.hypot(tdx, tdy) || 1;
+          mvx = (tdx / td) * sp;
+          mvy = (tdy / td) * sp;
+          if (e.stateT <= 0 && d < 220 && !g.playerDead) {
+            e.state = 1;
+            e.stateT = 0.55;
+            e.ax = dx / d;
+            e.ay = dy / d;
+            g.telegraph({ kind: 'line', x: e.x, y: e.y, r: 0, ang: Math.atan2(dy, dx), len: 190, w: 8 + e.r, dur: 0.55, color: 0x6a5acd });
+          }
+        } else if (e.state === 1) {
+          if (e.stateT <= 0) {
+            e.state = 2;
+            e.stateT = 0.5;
+          }
+        } else {
+          mvx = e.ax * 360;
+          mvy = e.ay * 360;
+          if (e.stateT <= 0) {
+            e.state = 0;
+            e.stateT = 3 + Math.random() * 2.5;
+          }
+        }
+        break;
+      case 'charger':
+        // a long, heavy charge along a marked line
+        e.stateT -= dt * ts;
+        if (e.state === 0) {
+          mvx = (dx / d) * sp;
+          mvy = (dy / d) * sp;
+          if (d < 260 && e.stateT <= 0 && !g.playerDead) {
+            e.state = 1;
+            e.stateT = 0.85;
+            e.ax = dx / d;
+            e.ay = dy / d;
+            g.telegraph({ kind: 'line', x: e.x, y: e.y, r: 0, ang: Math.atan2(dy, dx), len: 300, w: 14 + e.r, dur: 0.85, color: 0xffa040 });
+            audio.play('warn', { vol: 0.35, pitch: 0.7 });
+          }
+        } else if (e.state === 1) {
+          if (e.stateT <= 0) {
+            e.state = 2;
+            e.stateT = 0.7;
+          }
+        } else {
+          mvx = e.ax * 420;
+          mvy = e.ay * 420;
+          if (Math.random() < 0.3) g.fx.puff(e.x, e.y + 6, 0x5a3a2a, 10, 0.3, 0, 0, 0.3);
+          if (e.stateT <= 0) {
+            e.state = 0;
+            e.stateT = 3.2 + Math.random();
+          }
+        }
+        break;
+      case 'scribe':
+      case 'spitter': {
+        // keep a writing distance, then mark the floor where you stand
+        if (d > 240) {
+          mvx = (dx / d) * sp;
+          mvy = (dy / d) * sp;
+        } else if (d < 170) {
+          mvx = (-dx / d) * sp;
+          mvy = (-dy / d) * sp;
+        } else {
+          const s = e.uid % 2 ? 1 : -1;
+          mvx = (-dy / d) * sp * 0.6 * s;
+          mvy = (dx / d) * sp * 0.6 * s;
+        }
+        e.stateT -= dt * ts;
+        if (e.stateT <= 0 && d < 340 && !g.playerDead) {
+          const scribe = def.behavior === 'scribe';
+          e.stateT = scribe ? 4.5 + Math.random() * 2 : 3.6 + Math.random() * 1.5;
+          const tx = g.px + g.pvx * (scribe ? 0.2 : 0.45), ty = g.py + g.pvy * (scribe ? 0.2 : 0.45);
+          const R = scribe ? 34 : 26;
+          const dmg = e.dmg;
+          const hz = g.hazards;
+          g.telegraph({
+            kind: 'circle', x: tx, y: ty, r: R, ang: 0, len: 0, w: 0, dur: scribe ? 1 : 0.95, color: scribe ? 0x9fe8ff : 0x9aff3d,
+            onDone: () => {
+              if (scribe) hz.addField('glyph', tx, ty, R, 5);
+              else {
+                hz.addField('acid', tx, ty, R, 4, dmg * 0.35);
+                if (!g.playerDead && (g.px - tx) ** 2 + (g.py - ty) ** 2 < (R + 6) ** 2) g.hurt(dmg * 0.7, null);
+                g.fx.puff(tx, ty, 0x9aff3d, 18, 0.4, 0, -10, 0.4);
+              }
+            },
+          });
+          // the glob flies to the mark (visual only: the mark is what hurts)
+          if (!scribe) g.fx.spawn('px', g.a.px.dot, e.x, e.y - 6, { vx: (tx - e.x) / 0.95, vy: (ty - e.y) / 0.95, life: 0.95, tint: 0x9aff3d, s0: 1.6, s1: 1.2, force: true });
+        }
+        break;
+      }
+      case 'egg':
+        // a sac that hatches unless popped; it shakes and is marked before it does
+        e.stateT -= dt * ts;
+        if (e.state === 0 && e.stateT <= 0) {
+          e.state = 1;
+          e.stateT = 7 + Math.random() * 3;
+        } else if (e.state === 1 && e.stateT <= 1.4) {
+          e.state = 2;
+          g.telegraph({ kind: 'ring', x: e.x, y: e.y, r: 34, ang: 0, len: 0, w: 0, dur: 1.4, color: 0xe8c850 });
+        } else if (e.state === 2) {
+          e.scale = 1 + Math.sin(g.time * 30) * 0.08;
+          if (e.stateT <= 0) {
+            hatchEgg(g, e);
+            continue;
+          }
+        }
+        break;
       case 'shooter': {
         if (d > 230) {
           mvx = (dx / d) * sp;
@@ -561,6 +677,21 @@ export function damageEnemy(g: Game, e: Enemy, amount: number, src: string, o: D
   }
   if (e.hp <= 0) killEnemy(g, e, src);
   return dmg;
+}
+
+/** an Egg Sac hatches: broodlings pour out, and it leaves no reward */
+function hatchEgg(g: Game, e: Enemy): void {
+  const n = 5;
+  for (let k = 0; k < n; k++) {
+    const a = (k / n) * TAU + Math.random();
+    const s = spawnEnemy(g, 'broodling', e.x + Math.cos(a) * 6, e.y + Math.sin(a) * 6, { hpMult: e.maxHp / e.def!.hp, dmgMult: e.dmg / Math.max(1, ENEMIES.broodling.damage * ENEMY_DAMAGE_SCALE) || 1, countsForMeter: false });
+    s.kx = Math.cos(a) * 180;
+    s.ky = Math.sin(a) * 180;
+  }
+  g.fx.puff(e.x, e.y, 0xe8c850, 20, 0.4, 0, 0, 0.4);
+  g.fx.sparks(e.x, e.y, 0xfff0a0, 6, 120, 0.3);
+  e.dead = true;
+  flushNumber(g, e);
 }
 
 const CONFETTI = [0xff4d6d, 0xffc94d, 0x7dff8a, 0x59f3ff, 0xc46dff];

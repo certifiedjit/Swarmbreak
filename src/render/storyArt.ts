@@ -117,6 +117,61 @@ export function storyScene(id: string): Pix {
     crystalRidge(p, 36, ending ? 92 : 88, true);
     const hero = drawHeroFrames({ body: 'warden', palette: WARDEN_PALETTE }).victory;
     p.draw(hero, ending ? 80 : 30, ending ? 62 : 58);
+  } else if (id === 'archive_before' || id === 'archive_after') {
+    const after = id === 'archive_after';
+    // a snowbound moon under a new, small sun
+    starfield(p, after ? 53 : 51, 0x0a1220, after ? 0x2a3a52 : 0x1a2638);
+    p.circle(160, 22, 9, after ? 0xfff0c0 : 0xffe08a);
+    p.circle(160, 22, 6, 0xffffff);
+    // the stacks rising out of the drifts
+    for (let i = 0; i < 9; i++) {
+      const x = 4 + i * 22 + noise2(i, 1, 55) * 8, h = 20 + noise2(i, 2, 55) * 26;
+      p.rect(x, 86 - h, 16, h, 0x1a1418);
+      for (let y = 86 - h + 3; y < 84; y += 6) p.rect(x + 2, y, 12, 1, 0x3a2a24);
+      p.rect(x - 1, 86 - h - 2, 18, 3, 0xe6f0fa);
+    }
+    // snow ground
+    for (let y = 80; y < H; y++) for (let x = 0; x < W; x++) p.set(x, y, blend(0xc8d8e8, 0xeef4fa, noise2(Math.floor(x / 6), Math.floor(y / 3), 57)));
+    // falling snow
+    for (let i = 0; i < 90; i++) p.set(Math.floor(noise2(i, 3, 59) * W), Math.floor(noise2(i, 4, 59) * 80), noise2(i, 5, 59) > 0.5 ? 0xffffff : 0xbfd0e4);
+    if (after) {
+      // a hole melted through the ice, glowing nerve-red from below
+      p.ellipse(130, 96, 22, 6, 0x2a0c14);
+      p.ellipse(130, 96, 16, 4, 0x6a1e30);
+      p.ellipse(130, 96, 8, 2, 0xff6a8a);
+    }
+    const hero = drawHeroFrames({ body: 'warden', palette: WARDEN_PALETTE })[after ? 'victory' : 'idle'] as Pix | Pix[];
+    p.draw(Array.isArray(hero) ? hero[1] : hero, after ? 70 : 40, 60);
+  } else if (id === 'hive_before' || id === 'hive_after') {
+    const after = id === 'hive_after';
+    if (after) {
+      // climbing out: snow and the new sun above, the dark hive below
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) p.set(x, y, y < 54 ? blend(0x6a8ab8, 0xffd8a0, y / 54) : blend(0xeef4fa, 0x2a1018, Math.min(1, (y - 54) / 30)));
+      p.circle(96, 30, 12, 0xfff4c8);
+      p.circle(96, 30, 8, 0xffffff);
+      for (let i = 0; i < 40; i++) p.set(Math.floor(noise2(i, 1, 61) * W), Math.floor(noise2(i, 2, 61) * 50), 0xffffff);
+      p.ellipse(96, 62, 30, 6, 0x1a0a10);
+      const hero = drawHeroFrames({ body: 'warden', palette: WARDEN_PALETTE }).victory;
+      p.draw(hero, 80, 30);
+    } else {
+      // a living tunnel, lit by glowing nodules
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) p.set(x, y, blend(0x12060a, 0x30141e, noise2(Math.floor(x / 10), Math.floor(y / 10), 63) * 0.6 + (Math.abs(y - 54) / 54) * 0.4));
+      for (let i = 0; i < 14; i++) {
+        const x = noise2(i, 1, 65) * W, y = noise2(i, 2, 65) * H;
+        p.circle(x, y, 3, 0xff6a8a);
+        p.circle(x, y, 1.5, 0xffe0e8);
+      }
+      for (let k = 0; k < 2; k++) for (let x = 0; x < W; x++) {
+        const y = k ? 96 + Math.sin(x * 0.08) * 4 : 12 + Math.sin(x * 0.07 + 1) * 4;
+        p.rect(x, k ? y : 0, 1, k ? H - y : y, 0x1a0a0e);
+      }
+      // the mind's eye in the dark
+      p.ellipse(150, 50, 18, 12, 0x5a2a3a);
+      p.ellipse(150, 50, 8, 6, 0xff4d6d);
+      p.ellipse(150, 50, 2, 5, 0x1a0a10);
+      const hero = drawHeroFrames({ body: 'warden', palette: WARDEN_PALETTE }).idle[1];
+      p.draw(hero, 36, 60);
+    }
   } else {
     starfield(p, 1, 0x05060c, 0x100c18);
   }

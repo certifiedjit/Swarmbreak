@@ -7,6 +7,13 @@
  *  bell         (Cathedral) a bell that tolls and summons a sudden wave around you
  *  lightbeam    (Cathedral) drifting stained-glass light: heals you, but slows you
  *  gravitywell  (Black Sun) pulls everything in; its core crushes
+ *  blizzard     (Archive) a gust marked by chevrons on the ground, then shoves everyone downwind
+ *  freezepatch  (Archive) frost spreads over a patch of floor, then it freezes: slows and stings
+ *  eggfield     (Hive) a nest of hatched eggs that pulses, then spills broodlings around itself
+ *  acidpool     (Hive) a pool that bubbles, then boils
+ *
+ * Fields are short-lived patches enemies leave: Frost Scribe glyphs (slow) and
+ * Acid Spitter puddles (hurt). They only ever form where a telegraph was shown.
  *
  * To add a hazard kind: extend HazardSpec['kind'] in src/data/maps.ts and add
  * `place` / `update` / `draw` branches here.
@@ -38,10 +45,22 @@ interface Hazard {
   sprites: Sprite[];
 }
 
-const IDLE: Record<Kind, [number, number]> = { powerline: [2.8, 6.5], steamvent: [3.5, 8], bell: [10, 16], lightbeam: [0, 0], gravitywell: [4, 7] };
-const WARN: Record<Kind, number> = { powerline: 1.1, steamvent: 1.0, bell: 1.8, lightbeam: 0, gravitywell: 1.1 };
-const LIVE: Record<Kind, number> = { powerline: 1.7, steamvent: 1.9, bell: 0.4, lightbeam: 0, gravitywell: 3.2 };
-const PLAYER_DMG: Record<Kind, number> = { powerline: 13, steamvent: 10, bell: 0, lightbeam: 0, gravitywell: 16 };
+const IDLE: Record<Kind, [number, number]> = { powerline: [2.8, 6.5], steamvent: [3.5, 8], bell: [10, 16], lightbeam: [0, 0], gravitywell: [4, 7], blizzard: [14, 22], freezepatch: [3.5, 7.5], eggfield: [11, 17], acidpool: [3, 7.5] };
+const WARN: Record<Kind, number> = { powerline: 1.1, steamvent: 1.0, bell: 1.8, lightbeam: 0, gravitywell: 1.1, blizzard: 1.5, freezepatch: 1.2, eggfield: 1.6, acidpool: 1.0 };
+const LIVE: Record<Kind, number> = { powerline: 1.7, steamvent: 1.9, bell: 0.4, lightbeam: 0, gravitywell: 3.2, blizzard: 2.4, freezepatch: 2.6, eggfield: 0.3, acidpool: 2.0 };
+const PLAYER_DMG: Record<Kind, number> = { powerline: 13, steamvent: 10, bell: 0, lightbeam: 0, gravitywell: 16, blizzard: 0, freezepatch: 6, eggfield: 0, acidpool: 8 };
+
+/** a patch an enemy leaves on the floor */
+interface Field {
+  kind: 'glyph' | 'acid';
+  x: number;
+  y: number;
+  r: number;
+  life: number;
+  max: number;
+  tick: number;
+  dmg: number;
+}
 const GLASS = [0xc04040, 0x4060c0, 0xc0a030, 0x40a060, 0x8040c0];
 
 const ids: number[] = [];
@@ -49,6 +68,10 @@ const ids: number[] = [];
 export class Hazards {
   private g: Game;
   list: Hazard[] = [];
+  fields: Field[] = [];
+  /** the current gust (world px/s), read by the snow */
+  windX = 0;
+  windY = 0;
 
   constructor(g: Game) {
     this.g = g;
@@ -91,6 +114,19 @@ export class Hazards {
           s.alpha = 0.35;
           g.decor.addChild(s);
           h.sprites.push(s);
+        } else if (spec.kind === 'blizzard') {
+          h.t = r.range(9, 14);
+        } else if (spec.kind === 'freezepatch') {
+          h.r = r.range(40, 54);
+        } else if (spec.kind === 'acidpool') {
+          h.r = r.range(32, 44);
+        } else if (spec.kind === 'eggfield') {
+          h.r = 70;
+          // a nest of already-hatched, dark shells: never mistaken for a live Egg Sac
+          for (let k = 0; k < 6; k++) {
+            const a = (k / 6) * TAU + r.range(-0.3, 0.3), d = r.range(14, 40);
+            h.sprites.push(this.sprite('nest_shell', x + Math.cos(a) * d, y + Math.sin(a) * d * 0.7, 0.5, 0.8, g.decor));
+          }
         } else if (spec.kind === 'gravitywell') {
           h.r = 170;
           const core = new Sprite(g.a.soft.glow);
@@ -120,8 +156,15 @@ export class Hazards {
   update(dt: number): void {
     const g = this.g;
     g.hazardSlow = 1;
+    this.windX *= Math.exp(-2 * dt);
+    this.windY *= Math.exp(-2 * dt);
+    this.updateFields(dt);
     const hw = g.viewW / 2 + 260, hh = g.viewH / 2 + 260;
     for (const h of this.list) {
+      if (h.kind === 'blizzard') {
+        this.updateBlizzard(h, dt);
+        continue;
+      }
       if (h.kind === 'lightbeam') {
         this.updateLight(h, dt);
         continue;
@@ -129,11 +172,12 @@ export class Hazards {
       h.t -= dt;
       const near = Math.abs(h.x - g.px) < hw && Math.abs(h.y - g.py) < hh;
       if (h.t <= 0) this.advance(h, near);
-      if (h.kind === 'bell') continue; // bells act once, when they toll
+      if (h.kind === 'bell' || h.kind === 'eggfield') continue; // they act once, when they go off
       if (!near) continue;
       this.ambient(h);
       if (h.state !== 2) continue;
       if (h.kind === 'gravitywell') this.pull(h, dt);
+      if (h.kind === 'freezepatch' && this.inside(h, g.px, g.py, 0)) g.hazardSlow = Math.min(g.hazardSlow, 0.65);
       h.tick -= dt;
       if (h.tick > 0) continue;
       h.tick = 0.3;
@@ -149,6 +193,15 @@ export class Hazards {
       if (!near && h.kind !== 'bell') return;
       if (h.kind === 'steamvent') g.telegraph({ kind: 'circle', x: h.x, y: h.y, r: h.r, ang: 0, len: 0, w: 0, dur: h.t, color: 0xdfe9ff });
       if (h.kind === 'gravitywell') g.telegraph({ kind: 'ring', x: h.x, y: h.y, r: h.r, ang: 0, len: 0, w: 0, dur: h.t, color: 0xb36bff });
+      if (h.kind === 'freezepatch') g.telegraph({ kind: 'circle', x: h.x, y: h.y, r: h.r, ang: 0, len: 0, w: 0, dur: h.t, color: 0x9fe8ff });
+      if (h.kind === 'acidpool') g.telegraph({ kind: 'circle', x: h.x, y: h.y, r: h.r, ang: 0, len: 0, w: 0, dur: h.t, color: 0x9aff3d });
+      if (h.kind === 'eggfield') {
+        if (Math.hypot(h.x - g.px, h.y - g.py) < 900) {
+          g.telegraph({ kind: 'ring', x: h.x, y: h.y, r: h.r + 40, ang: 0, len: 0, w: 0, dur: h.t, color: 0xe8c850 });
+          audio.play('warn', { vol: 0.35, pitch: 0.8 });
+        }
+        return;
+      }
       if (h.kind === 'bell') {
         if (Math.hypot(h.x - g.px, h.y - g.py) < 1000) {
           audio.play('bell');
@@ -163,6 +216,7 @@ export class Hazards {
       h.t = LIVE[h.kind];
       h.tick = 0;
       if (h.kind === 'bell') this.toll(h);
+      else if (h.kind === 'eggfield') this.hatch(h);
       else if (near) audio.play(h.kind === 'powerline' ? 'zap' : h.kind === 'gravitywell' ? 'magnet' : 'dash', { vol: 0.5, pitch: h.kind === 'powerline' ? 0.6 : 0.5 });
     } else {
       h.state = 0;
@@ -190,6 +244,86 @@ export class Hazards {
       const e = spawnEnemy(g, keys[g.rng.weighted(weights)], x, y, { hpMult: p.hpMult, dmgMult: p.dmgMult });
       e.xp = Math.max(1, e.xp);
       g.fx.embers(x, y, 0xffd34d, 3, 50, 0.5);
+    }
+  }
+
+/** a nest spills broodlings around itself (only near the player) */
+  private hatch(h: Hazard): void {
+    const g = this.g;
+    if (Math.hypot(h.x - g.px, h.y - g.py) > 900 || g.victoryT >= 0) return;
+    const p = g.flow ? { hpMult: g.flow.spec.hpMult, dmgMult: g.flow.spec.dmgMult } : endlessParams(g.endlessT);
+    const n = Math.min(Math.max(0, 560 - g.enemies.length), 7 + (g.flow ? g.flow.round * 2 : Math.floor(g.time / 90)));
+    for (let k = 0; k < n; k++) {
+      const a = (k / n) * TAU, d = h.r * 0.6 + Math.random() * 30;
+      const e = spawnEnemy(g, 'broodling', h.x + Math.cos(a) * d, h.y + Math.sin(a) * d, { hpMult: p.hpMult * g.mods.hp, dmgMult: p.dmgMult * g.mods.dmg, countsForMeter: false });
+      e.kx = Math.cos(a) * 160;
+      e.ky = Math.sin(a) * 160;
+    }
+    g.fx.puff(h.x, h.y, 0xc8b060, 40, 0.5, 0, -10, 0.5);
+    audio.play('curse', { vol: 0.4, pitch: 1.4 });
+  }
+
+  /** the blizzard: chevrons on the ground show where the wind will blow, then it shoves everyone */
+  private updateBlizzard(h: Hazard, dt: number): void {
+    const g = this.g;
+    h.t -= dt;
+    if (h.t <= 0) {
+      if (h.state === 0) {
+        h.state = 1;
+        h.t = WARN.blizzard;
+        const a = Math.random() * TAU;
+        h.vx = Math.cos(a);
+        h.vy = Math.sin(a);
+        audio.play('warn', { vol: 0.35, pitch: 0.6 });
+        g.ui.toast('A gust is coming — brace!', '#cfefff');
+      } else if (h.state === 1) {
+        h.state = 2;
+        h.t = LIVE.blizzard;
+        audio.play('dash', { vol: 0.5, pitch: 0.4 });
+      } else {
+        h.state = 0;
+        h.t = IDLE.blizzard[0] + Math.random() * (IDLE.blizzard[1] - IDLE.blizzard[0]);
+      }
+    }
+    if (h.state !== 2) return;
+    const F = 110;
+    this.windX = h.vx * F * 3;
+    this.windY = h.vy * F * 3;
+    if (!g.playerDead && g.dashT <= 0) {
+      g.px = Math.min(g.map.width - 16, Math.max(16, g.px + h.vx * F * dt));
+      g.py = Math.min(g.map.height - 16, Math.max(16, g.py + h.vy * F * dt));
+    }
+    for (const e of g.enemies) {
+      if (e.dead || e.mass >= 1 || e.kind !== 'normal') continue;
+      e.kx += h.vx * 260 * dt * (1 - e.mass);
+      e.ky += h.vy * 260 * dt * (1 - e.mass);
+    }
+  }
+
+  /** an enemy-made patch: always preceded by a telegraph from its maker */
+  addField(kind: Field['kind'], x: number, y: number, r: number, life: number, dmg = 0): void {
+    if (this.fields.length > 60) this.fields.shift();
+    this.fields.push({ kind, x, y, r, life, max: life, tick: 0, dmg });
+  }
+
+  private updateFields(dt: number): void {
+    const g = this.g;
+    for (let i = this.fields.length - 1; i >= 0; i--) {
+      const f = this.fields[i];
+      f.life -= dt;
+      if (f.life <= 0) {
+        this.fields.splice(i, 1);
+        continue;
+      }
+      if (g.playerDead || (g.px - f.x) ** 2 + (g.py - f.y) ** 2 > f.r * f.r) continue;
+      if (f.kind === 'glyph') g.hazardSlow = Math.min(g.hazardSlow, 0.7);
+      else {
+        f.tick -= dt;
+        if (f.tick <= 0) {
+          f.tick = 0.4;
+          g.hurt(f.dmg, null);
+        }
+      }
     }
   }
 
@@ -241,6 +375,8 @@ export class Hazards {
       const a = Math.random() * TAU, d = h.r * (h.state === 2 ? 0.9 : 0.4);
       g.fx.spawn('px', g.a.px.px, h.x + Math.cos(a) * d, h.y + Math.sin(a) * d, { vx: -Math.cos(a) * d * 1.6 - Math.sin(a) * 60, vy: -Math.sin(a) * d * 1.6 + Math.cos(a) * 60, life: 0.6, tint: 0xc9a8ff, s0: 1.3, s1: 0.2 });
     }
+    if (h.kind === 'acidpool' && Math.random() < (h.state === 2 ? 0.5 : 0.08)) g.fx.spawn('px', g.a.px.px, h.x + (Math.random() - 0.5) * h.r * 1.4, h.y + (Math.random() - 0.5) * h.r, { vy: -30, life: 0.4, tint: 0xc8ff6a, s0: 1.4, s1: 0.4 });
+    if (h.kind === 'freezepatch' && h.state === 2 && Math.random() < 0.3) g.fx.spawn('px', g.a.px.px, h.x + (Math.random() - 0.5) * h.r * 1.4, h.y + (Math.random() - 0.5) * h.r, { vy: -14, life: 0.6, tint: 0xeaffff, s0: 1.2, s1: 0.3 });
     if (h.state !== 2) return;
     if (h.kind === 'steamvent') {
       if (!g.reduced || Math.random() < 0.5) g.fx.puff(h.x + (Math.random() - 0.5) * 24, h.y - 4, 0xd8e2f0, 26, 0.9, (Math.random() - 0.5) * 30, -70, 0.42);
@@ -289,6 +425,18 @@ export class Hazards {
     const g = this.g;
     const gfx = g.hazardGfx;
     gfx.clear();
+    for (const f of this.fields) {
+      const k = Math.min(1, f.life / 0.5, (f.max - f.life) / 0.25 + 0.3);
+      if (f.kind === 'glyph') {
+        gfx.circle(f.x, f.y, f.r).fill({ color: 0x7fd0ff, alpha: 0.18 * k });
+        gfx.circle(f.x, f.y, f.r).stroke({ color: 0xcff4ff, width: 1.5, alpha: 0.7 * k });
+        // the written rune
+        gfx.moveTo(f.x - f.r * 0.5, f.y).lineTo(f.x + f.r * 0.5, f.y).moveTo(f.x, f.y - f.r * 0.5).lineTo(f.x, f.y + f.r * 0.5).stroke({ color: 0xffffff, width: 1.5, alpha: 0.6 * k });
+      } else {
+        gfx.ellipse(f.x, f.y, f.r, f.r * 0.85).fill({ color: 0x9aff3d, alpha: 0.3 * k });
+        gfx.ellipse(f.x, f.y, f.r, f.r * 0.85).stroke({ color: 0xc8ff6a, width: 1.2, alpha: 0.7 * k });
+      }
+    }
     const hw = g.viewW / 2 + 260, hh = g.viewH / 2 + 260;
     const t = g.time;
     for (const h of this.list) {
@@ -325,6 +473,33 @@ export class Hazards {
           gfx.moveTo(ox - 120, h.y - 220).lineTo(ox, h.y).stroke({ color: col, width: h.r * 0.28, alpha: 0.05 });
         }
         gfx.ellipse(h.x, h.y, h.r, h.r * 0.92).stroke({ color: 0xfff3c0, width: 1.2, alpha: 0.35 });
+      } else if (h.kind === 'blizzard') {
+        if (h.state === 0) continue;
+        // chevrons on the ground around you, pointing downwind
+        const a = Math.atan2(h.vy, h.vx), live = h.state === 2;
+        const al = live ? 0.5 : 0.35 + 0.25 * Math.sin(t * 14);
+        for (let k = 0; k < 14; k++) {
+          const ox = g.px + ((k * 97) % 11 - 5) * 34 + h.vx * ((t * (live ? 300 : 60) + k * 40) % 120);
+          const oy = g.py + ((k * 53) % 9 - 4) * 34 + h.vy * ((t * (live ? 300 : 60) + k * 40) % 120);
+          const c = Math.cos(a), s = Math.sin(a);
+          gfx.moveTo(ox - c * 8 - s * 7, oy - s * 8 + c * 7).lineTo(ox, oy).lineTo(ox - c * 8 + s * 7, oy - s * 8 - c * 7).stroke({ color: 0xeaffff, width: 2, alpha: al });
+        }
+      } else if (h.kind === 'freezepatch') {
+        const live = h.state === 2;
+        gfx.circle(h.x, h.y, h.r).fill({ color: 0xbfe8ff, alpha: live ? 0.42 : 0.12 });
+        if (live) gfx.circle(h.x, h.y, h.r).stroke({ color: 0xffffff, width: 1.5, alpha: 0.7 });
+        for (let k = 0; k < 5; k++) {
+          const ang = k * 1.26 + h.hue;
+          gfx.moveTo(h.x, h.y).lineTo(h.x + Math.cos(ang) * h.r * 0.8, h.y + Math.sin(ang) * h.r * 0.8).stroke({ color: 0xffffff, width: 1, alpha: live ? 0.6 : 0.18 });
+        }
+      } else if (h.kind === 'acidpool') {
+        const live = h.state === 2;
+        gfx.ellipse(h.x, h.y, h.r, h.r * 0.85).fill({ color: live ? 0x9aff3d : 0x4a7a1a, alpha: live ? 0.45 + 0.08 * Math.sin(t * 16) : 0.35 });
+        gfx.ellipse(h.x, h.y, h.r, h.r * 0.85).stroke({ color: 0xc8ff6a, width: 1.2, alpha: live ? 0.8 : 0.3 });
+      } else if (h.kind === 'eggfield') {
+        const warn = h.state === 1;
+        for (const s of h.sprites) s.rotation = warn ? Math.sin(t * 22 + s.x) * 0.15 : 0;
+        if (warn) gfx.circle(h.x, h.y, h.r * 0.6).fill({ color: 0xe8c850, alpha: 0.12 + 0.08 * Math.sin(t * 18) });
       } else if (h.kind === 'gravitywell') {
         const [core, ring] = h.sprites;
         const live = h.state === 2;

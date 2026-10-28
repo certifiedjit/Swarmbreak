@@ -7,6 +7,8 @@ import { Rectangle, Texture, TextureSource } from 'pixi.js';
 import { BIG_SPRITES, BOSS_DRAW, ENEMY_DRAW, ENEMY_FRAMES } from './enemyArt';
 import { bell, candles, cathedralFloor, glassShard, pew, pillar } from './cathedralArt';
 import { blackSunFloor, crystalSpire, floatingRock, starEmber } from './blackSunArt';
+import { archiveFloor, buriedShelf, frozenPillar, iceSpikes, lostBook, snowDrift } from './archiveArt';
+import { chitinRidge, deadTendril, glowPod, hiveFloor, nestShell } from './hiveArt';
 import * as fx from './fxArt';
 import { HERO_BODIES, HERO_PALETTES, drawHeroFrames, type HeroBody, type HeroFrames } from './heroArt';
 import { skinPalette, spectral } from './heroSkins';
@@ -281,6 +283,19 @@ export function buildAssets(): Assets {
   for (let i = 0; i < 3; i++) pxItems[`rock${i}`] = floatingRock(i);
   pxItems.ember = starEmber();
 
+  // Frozen Archive decor
+  for (let i = 0; i < 2; i++) pxItems[`drift${i}`] = snowDrift(i);
+  for (let i = 0; i < 2; i++) pxItems[`shelf${i}`] = buriedShelf(i);
+  pxItems.fpillar = frozenPillar(false);
+  pxItems.fpillar_broken = frozenPillar(true);
+  for (let i = 0; i < 2; i++) pxItems[`icespike${i}`] = iceSpikes(i);
+  for (let i = 0; i < 3; i++) pxItems[`book${i}`] = lostBook(i);
+  // Hive decor
+  for (let i = 0; i < 2; i++) pxItems[`ridge${i}`] = chitinRidge(i);
+  for (let i = 0; i < 2; i++) pxItems[`tendril${i}`] = deadTendril(i);
+  pxItems.glowpod = glowPod();
+  pxItems.nest_shell = nestShell();
+
   const px = pack(pxItems, true);
   const soft = pack(
     {
@@ -337,7 +352,7 @@ export function buildAssets(): Assets {
     soft: soft.frames,
     pxSource: px.source,
     softSource: soft.source,
-    floor: { graveyard: floorTex(graveyardFloor(3)), cathedral: floorTex(cathedralFloor(2)), blacksun: floorTex(blackSunFloor(4)) },
+    floor: { graveyard: floorTex(graveyardFloor(3)), cathedral: floorTex(cathedralFloor(2)), blacksun: floorTex(blackSunFloor(4)), archive: floorTex(archiveFloor(5)), hive: floorTex(hiveFloor(6)) },
     heroes,
     enemy,
     enemyFlash,

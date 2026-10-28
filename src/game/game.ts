@@ -39,6 +39,7 @@ import { WorldObjects } from './objects';
 import { Pickups } from './pickups';
 import type { Enemy, EnemyBullet, Projectile, Telegraph, Zone } from './types';
 import { Weapons } from './weapons';
+import { Weather } from './weather';
 import { HeroPassive } from './heroPassive';
 
 export const STEP = 1 / 60;
@@ -190,6 +191,8 @@ export class Game {
   readonly weapons: Weapons;
   /** the hero's signature passive */
   readonly passive: HeroPassive;
+  /** snow, footprints and whiteouts (Frozen Archive) */
+  readonly weather: Weather;
   /** weapons that can be offered this run */
   readonly weaponPool: readonly string[];
   readonly tier: TierId;
@@ -404,6 +407,11 @@ export class Game {
     this.darkness.anchor.set(0.5);
     this.darkness.visible = false;
     this.root.addChild(this.world, this.darkness, this.vignette, this.flashGfx);
+    // weather: footprints on the floor; snow and whiteout fog under bullets and warnings
+    this.weather = new Weather(this);
+    this.world.addChildAt(this.weather.prints.pc, this.world.getChildIndex(this.floor) + 1);
+    this.world.addChildAt(this.weather.fog, this.world.getChildIndex(this.worldDark) + 1);
+    this.world.addChildAt(this.weather.snow.pc, this.world.getChildIndex(this.weather.fog) + 1);
 
     // systems
     this.passive = new HeroPassive(this, meta.passive);
@@ -520,6 +528,38 @@ export class Game {
     this.maybeOpenLevelUp();
   }
 
+  // ------------------------------------------------------------------ boss fields
+  private updateBossFields(dt: number): void {
+    if (this.chillT > 0) this.chillT -= dt;
+    let inside = false;
+    for (let i = this.silenceZones.length - 1; i >= 0; i--) {
+      const z = this.silenceZones[i];
+      z.t -= dt;
+      if (z.t <= 0) this.silenceZones.splice(i, 1);
+      else if ((this.px - z.x) ** 2 + (this.py - z.y) ** 2 < z.r * z.r) inside = true;
+    }
+    if (inside && !this.silenced && !this.silenceToast) {
+      this.silenceToast = true;
+      this.ui.toast('SILENCED — step out of the circle', '#9fb0ff');
+    }
+    if (!inside) this.silenceToast = false;
+    this.silenced = inside;
+    const a = this.arena;
+    if (a && !this.playerDead) {
+      a.r = Math.max(a.to, a.r - 9 * dt);
+      const dx = this.px - a.x, dy = this.py - a.y, d = Math.hypot(dx, dy) || 1;
+      if (d > a.r) {
+        this.px -= (dx / d) * 120 * dt;
+        this.py -= (dy / d) * 120 * dt;
+        this.arenaTick -= dt;
+        if (this.arenaTick <= 0) {
+          this.arenaTick = 0.5;
+          this.hurt(14 * this.mods.dmg * (1 + 0.2 * (this.map.chapter - 1)), null);
+        }
+      }
+    }
+  }
+
   // ------------------------------------------------------------------ shrinking light (Black Sun)
   /** radius of the circle of light around you (0 = full light) */
   lightR = 0;
@@ -580,6 +620,8 @@ export class Game {
     this.updateBullets(dt);
     this.updateZones(dt);
     this.hazards.update(dt);
+    this.weather.tick(dt);
+    this.updateBossFields(dt);
     this.updateLight(dt);
     this.objects.update(dt);
     this.pickups.update(dt);
@@ -832,9 +874,20 @@ export class Game {
   // ------------------------------------------------------------------ player
   /** set each tick by hazards (stained-glass light slows you) */
   hazardSlow = 1;
+  /** the last spell you cast (the Archivist reads it back) */
+  lastSpell = '';
+  /** seconds of being chilled (half speed) */
+  chillT = 0;
+  /** the Librarian's circles of silence: weapons stop while you stand inside one */
+  silenceZones: { x: number; y: number; r: number; t: number; max: number }[] = [];
+  silenced = false;
+  private silenceToast = false;
+  /** the Swarm Mind's shrinking arena: outside it hurts */
+  arena: { x: number; y: number; r: number; to: number } | null = null;
+  private arenaTick = 0;
 
   get speedMult(): number {
-    return (this.frenzy > 0 ? 1.1 : 1) * this.hazardSlow;
+    return (this.frenzy > 0 ? 1.1 : 1) * this.hazardSlow * (this.chillT > 0 ? 0.55 : 1);
   }
 
   get enemyTimeScale(): number {
@@ -884,6 +937,7 @@ export class Game {
   castSpell(): void {
     if (this.spellCd > 0 || this.playerDead) return;
     const def = SPELLS[this.build.spell];
+    this.lastSpell = def.id;
     this.spellCd = (def.cooldown * spellCooldownMult(this.opts.character, def.id)) / Math.min(2, this.stats.attackSpeed * 0.5 + 0.5);
     const s = this.stats;
     switch (def.kind) {
@@ -1556,6 +1610,7 @@ export class Game {
     this.camY = damp(this.camY, this.py, 10, dt);
     const sw = this.app.screen.width, sh = this.app.screen.height;
     this.world.position.set(Math.round(sw / 2 - this.camX * this.zoom), Math.round(sh / 2 - this.camY * this.zoom));
+    if (this.modal === 'none' || this.modal === 'ended') this.weather.draw(dt);
 
     // player
     const hero = this.heroTex();
@@ -1634,6 +1689,22 @@ export class Game {
   private drawTelegraphs(): void {
     const g = this.teleGfx;
     g.clear();
+    // circles of silence: a dim indigo disc with a muted, crossed-out ring
+    for (const z of this.silenceZones) {
+      const k = Math.min(1, z.t / 0.6, (z.max - z.t) / 0.3 + 0.3);
+      g.circle(z.x, z.y, z.r).fill({ color: 0x1a1e48, alpha: 0.32 * k });
+      g.circle(z.x, z.y, z.r).stroke({ color: 0x9fb0ff, width: 2, alpha: 0.75 * k });
+      for (let i = 0; i < 12; i++) {
+        const an = (i / 12) * Math.PI * 2 + this.time * 0.3;
+        g.moveTo(z.x + Math.cos(an) * (z.r - 6), z.y + Math.sin(an) * (z.r - 6)).lineTo(z.x + Math.cos(an) * (z.r + 4), z.y + Math.sin(an) * (z.r + 4)).stroke({ color: 0x9fb0ff, width: 1.5, alpha: 0.6 * k });
+      }
+    }
+    // the Swarm Mind's arena wall
+    if (this.arena) {
+      const ar = this.arena;
+      g.circle(ar.x, ar.y, ar.r).stroke({ color: 0xff6a8a, width: 4, alpha: 0.55 + 0.2 * Math.sin(this.time * 6) });
+      g.circle(ar.x, ar.y, ar.r + 14).stroke({ color: 0xff6a8a, width: 22, alpha: 0.12 });
+    }
     for (const t of this.telegraphs) {
       const k = t.t / t.dur;
       const pulse = 0.5 + 0.5 * Math.sin(t.t * 18);

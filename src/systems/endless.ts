@@ -54,6 +54,14 @@ export const ENDLESS_UNLOCK: Record<string, number> = {
   rift_wraith: 60,
   eclipse_seer: 120,
   star_eater: 240,
+  // Frozen Archive
+  frost_scribe: 70,
+  ink_hound: 110,
+  tome_golem: 250,
+  // Hive Below
+  acid_spitter: 60,
+  egg_sac: 100,
+  carapace_charger: 160,
 };
 
 /** spawn weights at time t: a type fades in over 45s after it unlocks */

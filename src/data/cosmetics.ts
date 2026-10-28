@@ -91,7 +91,9 @@ export const COSMETICS: CosmeticDef[] = [
   { id: 'menu_graveyard_after', kind: 'menu', name: 'Titanfall', desc: 'The Graveyard, after the Star-Titan.', scene: 'graveyard_after' },
   { id: 'menu_cathedral', kind: 'menu', name: 'Cathedral Moon', desc: 'The moon of bells and glass.', scene: 'cathedral_before' },
   { id: 'menu_blacksun', kind: 'menu', name: 'The Black Sun', desc: 'The dark at the heart of it all.', scene: 'blacksun_before' },
-  { id: 'menu_ending', kind: 'menu', name: 'Dawn', desc: 'After the swarm.', scene: 'ending' },
+  { id: 'menu_ending', kind: 'menu', name: 'Dawn', desc: 'The black sun, burning bright.', scene: 'ending' },
+  { id: 'menu_archive', kind: 'menu', name: 'The Frozen Archive', desc: 'Shelves under the snow.', scene: 'archive_before' },
+  { id: 'menu_hive', kind: 'menu', name: 'Out of the Hive', desc: 'Climbing into the new sun.', scene: 'hive_after' },
 ];
 
 export const COSMETIC_BY_ID: Record<string, CosmeticDef> = Object.fromEntries(COSMETICS.map((c) => [c.id, c]));

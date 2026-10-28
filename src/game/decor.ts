@@ -147,7 +147,67 @@ function blacksun(c: Ctx): void {
   }
 }
 
-const BUILDERS: Record<string, (c: Ctx) => void> = { graveyard, cathedral, blacksun };
+function archive(c: Ctx): void {
+  const { r, W, H } = c;
+  const cx = W / 2, cy = H / 2;
+  // rows of half-buried shelves: the stacks
+  for (let row = 0; row < 8; row++) {
+    const y = 180 + row * 390 + r.range(-40, 40);
+    for (let x = 140; x < W - 100; x += r.range(160, 260)) {
+      if (Math.hypot(x - cx, y - cy) < 250 || r.chance(0.3)) continue;
+      spr(c, `shelf${r.int(0, 1)}`, x, y, { ay: 0.85, flip: r.chance(0.5) });
+    }
+  }
+  // drifts banked against everything
+  for (let i = 0; i < 110; i++) {
+    const x = r.range(-100, W + 100), y = r.range(-100, H + 100);
+    if (Math.hypot(x - cx, y - cy) < 180) continue;
+    spr(c, `drift${r.int(0, 1)}`, x, y, { flip: r.chance(0.5), alpha: 0.95 });
+  }
+  // frozen pillars and ice spikes
+  for (let i = 0; i < 40; i++) {
+    const x = r.range(80, W - 80), y = r.range(80, H - 80);
+    if (Math.hypot(x - cx, y - cy) < 240) continue;
+    spr(c, r.chance(0.35) ? 'fpillar_broken' : 'fpillar', x, y, { ay: 0.92 });
+  }
+  for (let i = 0; i < 70; i++) spr(c, `icespike${r.int(0, 1)}`, r.range(0, W), r.range(0, H), { ay: 0.9, flip: r.chance(0.5) });
+  // closed books lost in the snow
+  for (let i = 0; i < 160; i++) spr(c, `book${r.int(0, 2)}`, r.range(0, W), r.range(0, H), { rot: r.range(-0.6, 0.6), alpha: 0.9 });
+  border(c, 0x0c1420, 0x9fe8ff);
+  for (const [x, y] of edgePoints(c, 90, [10, 80])) spr(c, r.chance(0.6) ? `shelf${r.int(0, 1)}` : 'fpillar', x, y, { ay: 0.9 });
+  // cold reading lamps
+  for (let i = 0; i < 45; i++) {
+    const x = r.range(40, W - 40), y = r.range(40, H - 40);
+    light(c, x, y, r.chance(0.7) ? 0x9fe8ff : 0xffd8a0, r.range(1, 1.8), 0.22, r.chance(0.3));
+  }
+}
+
+function hive(c: Ctx): void {
+  const { r, W, H } = c;
+  const cx = W / 2, cy = H / 2;
+  // chitin ridges in long curving walls
+  for (let wall = 0; wall < 12; wall++) {
+    let x = r.range(100, W - 100), y = r.range(100, H - 100), a = r.range(0, Math.PI * 2);
+    for (let k = 0; k < 9; k++) {
+      a += r.range(-0.4, 0.4);
+      x += Math.cos(a) * 40;
+      y += Math.sin(a) * 40;
+      if (Math.hypot(x - cx, y - cy) < 260) continue;
+      spr(c, `ridge${r.int(0, 1)}`, x, y, { ay: 0.9, flip: r.chance(0.5) });
+    }
+  }
+  for (let i = 0; i < 90; i++) spr(c, `tendril${r.int(0, 1)}`, r.range(0, W), r.range(0, H), { rot: r.range(0, Math.PI * 2), alpha: 0.85 });
+  border(c, 0x0a0406, 0xff6a8a);
+  for (const [x, y] of edgePoints(c, 100, [10, 90])) spr(c, `ridge${r.int(0, 1)}`, x, y, { ay: 0.9, rot: r.range(-0.3, 0.3) });
+  // glowing nodules: the only light down here, pulsing slowly
+  for (let i = 0; i < 70; i++) {
+    const x = r.range(40, W - 40), y = r.range(40, H - 40);
+    light(c, x, y, r.chance(0.8) ? 0xff6a8a : 0x9aff3d, r.range(0.9, 1.7), 0.3, true);
+    spr(c, 'glowpod', x, y);
+  }
+}
+
+const BUILDERS: Record<string, (c: Ctx) => void> = { graveyard, cathedral, blacksun, archive, hive };
 
 export function buildDecor(art: string, a: Assets, layer: Container, r: Rng, W: number, H: number): Lamp[] {
   const c: Ctx = { a, layer, r, W, H, lamps: [] };

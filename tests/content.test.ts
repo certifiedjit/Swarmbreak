@@ -47,3 +47,26 @@ describe('chapter content', () => {
     });
   }
 });
+
+describe('art and the chapter arc', () => {
+  it('every enemy, mini-boss and boss has art', async () => {
+    const { BOSS_DRAW, ENEMY_DRAW } = await import('../src/render/enemyArt');
+    for (const e of Object.values(ENEMIES)) expect(ENEMY_DRAW[e.sprite], e.id).toBeDefined();
+    for (const m of Object.values(MINIBOSSES)) expect(ENEMY_DRAW[m.sprite], m.id).toBeDefined();
+    for (const b of Object.values(BOSSES)) expect(BOSS_DRAW[b.sprite], b.id).toBeDefined();
+  });
+
+  it('each chapter is a step up from the last', () => {
+    for (let i = 1; i < playable.length; i++) {
+      const a = playable[i - 1].rounds, b = playable[i].rounds;
+      expect(b[0].hpMult, playable[i].id).toBeGreaterThan(a[0].hpMult);
+      expect(b[4].hpMult, playable[i].id).toBeGreaterThan(a[4].hpMult);
+      expect(b[4].kills, playable[i].id).toBeGreaterThan(a[4].kills);
+    }
+  });
+
+  it('the Hive is the finale; only the Frozen Archive has snow', () => {
+    expect(MAP_ORDER[MAP_ORDER.length - 1]).toBe('hive');
+    expect(playable.filter((m) => m.snow).map((m) => m.id)).toEqual(['archive']);
+  });
+});

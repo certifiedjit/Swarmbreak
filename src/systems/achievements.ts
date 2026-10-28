@@ -4,6 +4,7 @@
  * grind wall (the big kill counts unlock cosmetics, never power).
  */
 import { CHARACTER_IDS } from '../data/characters';
+import { MAP_ORDER } from '../data/maps';
 
 export interface AchContext {
   totalKills: number;
@@ -81,10 +82,12 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   A({ id: 'clear_graveyard', name: 'Titanfall', desc: 'Clear Chapter I: The Starship Graveyard.', icon: 'medal', color: 0x59f3ff, need: 1, value: (c) => Math.min(1, c.chaptersCleared), reward: { cosmetics: ['sprout', 'menu_graveyard_after'] } }),
   A({ id: 'clear_cathedral', name: 'Last Toll', desc: 'Clear Chapter II: The Cathedral Moon.', icon: 'medal', color: 0xffc94d, need: 1, value: (c) => (c.chaptersCleared >= 2 ? 1 : 0), reward: { weapon: 'sweep_laser', cosmetics: ['menu_cathedral'] } }),
   A({ id: 'clear_black_sun', name: 'Dawn', desc: 'Clear Chapter III: The Black Sun.', icon: 'medal', color: 0xc46dff, need: 1, value: (c) => (c.chaptersCleared >= 3 ? 1 : 0), reward: { weapon: 'starfall', cosmetics: ['menu_blacksun', 'menu_ending'] } }),
+  A({ id: 'clear_archive', name: 'Read to the End', desc: 'Clear Chapter IV: The Frozen Archive.', icon: 'medal', color: 0x9fe8ff, need: 1, value: (c) => (c.chaptersCleared >= 4 ? 1 : 0), reward: { cosmetics: ['menu_archive'], shards: 60 } }),
+  A({ id: 'clear_hive', name: 'Swarmbroken', desc: 'Clear Chapter V: The Hive Below.', icon: 'crown', color: 0xff6a8a, need: 1, value: (c) => (c.chaptersCleared >= 5 ? 1 : 0), reward: { cosmetics: ['menu_hive'], shards: 100 } }),
   A({ id: 'story_tier', name: 'Scenic Route', desc: 'Clear a chapter on the Story tier.', icon: 'eye', color: 0x7dff8a, need: 1, value: (c) => c.storyTierClears, reward: { cosmetics: ['numbers_mono'] } }),
   A({ id: 'veteran_any', name: 'Battle-Scarred', desc: 'Clear a chapter on Veteran.', icon: 'shield', color: 0xffc94d, need: 1, value: (c) => tierCount(c, 2), reward: { cosmetics: ['trail_gold'], shards: 40 } }),
   A({ id: 'nightmare_any', name: 'Nightwalker', desc: 'Clear a chapter on Nightmare.', icon: 'mask', color: 0xff4d6d, need: 1, value: (c) => tierCount(c, 3), reward: { cosmetics: ['banner_nightwalker', 'trail_blood'], shards: 80 } }),
-  A({ id: 'nightmare_all', name: 'Waking Nightmare', desc: 'Clear all three chapters on Nightmare.', icon: 'mask', color: 0xff2a4d, need: 3, value: (c) => tierCount(c, 3), reward: { shards: 250 } }),
+  A({ id: 'nightmare_all', name: 'Waking Nightmare', desc: 'Clear every chapter on Nightmare.', icon: 'mask', color: 0xff2a4d, need: MAP_ORDER.length, value: (c) => tierCount(c, 3), reward: { shards: 250 } }),
 
   A({ id: 'hazard_free', name: 'Light on Your Feet', desc: 'Clear a chapter without taking any hazard damage.', icon: 'bolt', color: 0x59f3ff, need: 1, value: (c) => c.hazardFreeClears, reward: { weapon: 'aegis_wheels' } }),
   A({ id: 'no_dash_boss', name: 'Stand Your Ground', desc: 'Defeat a chapter boss without dashing during the fight.', icon: 'shield', color: 0x9aa3b8, need: 1, value: (c) => c.noDashBossKills, reward: { weapon: 'soul_scythe', cosmetics: ['banner_untouchable'] } }),

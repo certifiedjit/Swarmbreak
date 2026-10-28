@@ -55,13 +55,15 @@ function sourceName(id: string): string {
   return WEAPONS[id]?.name ?? SOURCE_NAMES[id] ?? id;
 }
 
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI'];
+
 const EPILOGUE: StoryCard = {
   title: 'Epilogue',
   art: 'ending',
   lines: [
     'The new sun rises over every world the dark had swallowed.',
-    'In the Graveyard the wrecks warm. On the Cathedral Moon, someone rings a bell — just once, on purpose.',
-    'The Warden walks on. Somewhere, the swarm still stirs. Endless is waiting.',
+    'In the Graveyard the wrecks warm. On the Cathedral Moon, someone rings a bell — just once, on purpose. In the Archive, the snow melts off the shelves, and the books begin to be read again.',
+    'The Warden walks on. The Hive is quiet. Endless is waiting, on every world.',
   ],
 };
 
@@ -494,7 +496,7 @@ export class UI implements GameUI {
                 renderCh();
               },
             },
-            h('div', { class: 'ch-num' }, `CHAPTER ${['I', 'II', 'III'][m.chapter - 1]}`),
+            h('div', { class: 'ch-num' }, `CHAPTER ${ROMAN[m.chapter - 1]}`),
             h('div', { class: 'ch-name' }, m.name),
             h('div', { class: 'ch-state' }, !m.available ? 'Coming in a later update' : done ? `✓ Cleared${best >= 0 ? ` on ${TIERS[best].name}` : ''}` : unlocked ? `5 rounds · mini-bosses · ${BOSSES[m.boss]?.name ?? 'a boss'}` : `Beat Chapter ${m.chapter - 1}`),
             m.available ? this.medals(best) : null,
@@ -901,8 +903,8 @@ export class UI implements GameUI {
       ['Design & Direction', ['The Swarmbreak team']],
       ['Code, Pixel Art, Sound & Music', ['Generated entirely in code', 'with Claude']],
       ['Play-testing', ['You', 'Your buddy, who survived the pre-arsenal days', 'A very determined bot that kited one boss for ten minutes']],
-      ['Heroes of the Swarm', ['The Warden, Void-Forged Knight', 'and five more, waiting in the dark']],
-      ['Defeated', ['The Fallen Star-Titan', 'The Organ-Beast', 'The Heart of the Black Sun']],
+      ['Heroes of the Swarm', ['The Warden, Void-Forged Knight', 'Glint, Cyber-Ninja Scout', 'The Voidcaller, Hooded Summoner', 'Riven, Techno-Engineer', 'Fortune, Cursed-Coin Rogue', 'Pyre, Plasma Sorcerer']],
+      ['Defeated', ['The Fallen Star-Titan', 'The Organ-Beast', 'The Heart of the Black Sun', 'The Librarian of Silence', 'The Swarm Mind']],
       ['Nothing in this game costs real money.', ['Ever.']],
       ['Thank you for playing', ['The light is back. Endless mode is waiting on every world.']],
     ];
@@ -1283,7 +1285,7 @@ export class UI implements GameUI {
     else notes.push(h('div', { class: 'unlock' }, `★ Endless unlocked on ${MAPS[MAP_ORDER[chapter - 1]].name}`));
     const next = MAP_ORDER.map((id) => MAPS[id]).find((m) => m.chapter === chapter + 1);
     if (next) {
-      const roman = ['I', 'II', 'III', 'IV'][next.chapter - 1];
+      const roman = ROMAN[next.chapter - 1];
       notes.push(next.available ? h('div', { class: 'unlock' }, `★ Chapter ${roman} unlocked — ${next.name}`) : h('div', { class: 'unlock dim' }, `Chapter ${roman} — ${next.name} — arrives in a later update`));
     } else notes.push(h('div', { class: 'unlock green' }, '★ The swarm is broken. You finished the story!'));
     return notes;

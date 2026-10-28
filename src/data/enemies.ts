@@ -3,7 +3,7 @@
  * src/render/enemyArt.ts keyed by `sprite`; behaviours in src/game/enemyAI.ts.
  */
 
-export type EnemyBehavior = 'chase' | 'flyer' | 'lunger' | 'shooter' | 'exploder' | 'artillery' | 'blinker' | 'eater' | 'orbiter';
+export type EnemyBehavior = 'chase' | 'flyer' | 'lunger' | 'shooter' | 'exploder' | 'artillery' | 'blinker' | 'eater' | 'orbiter' | 'diver' | 'scribe' | 'spitter' | 'charger' | 'egg' | 'node';
 
 export interface EnemyDef {
   id: string;
@@ -36,6 +36,69 @@ export interface EnemyDef {
 export const ENEMY_DAMAGE_SCALE = 1.1;
 
 export const ENEMIES: Record<string, EnemyDef> = {
+  // ---------------- Chapter 4: the Frozen Archive (dark shapes, so they read against the snow)
+  page_wraith: {
+    id: 'page_wraith', name: 'Page Wraith', sprite: 'pagewraith', behavior: 'diver',
+    hp: 14, speed: 70, damage: 8, radius: 7, xp: 2, coinChance: 0.25, mass: 0.05, color: 0x6a5acd,
+    lore: 'Torn-out chapters that refuse to be forgotten. They circle in flocks, then dive along a line of ink.',
+  },
+  ink_hound: {
+    id: 'ink_hound', name: 'Ink Hound', sprite: 'inkhound', behavior: 'lunger',
+    hp: 30, speed: 56, damage: 9, radius: 9, xp: 3, coinChance: 0.35, mass: 0.35, color: 0x3a4a8a,
+    lore: 'A spilled inkwell that learned to hunt. It crouches before it springs.',
+  },
+  frost_scribe: {
+    id: 'frost_scribe', name: 'Frost Scribe', sprite: 'scribe', behavior: 'scribe',
+    hp: 34, speed: 36, damage: 10, radius: 9, xp: 5, coinChance: 0.45, mass: 0.2, color: 0x4fb8ff,
+    lore: 'Still copying the last book. Every glyph it writes on the floor freezes whoever stands on it.',
+  },
+  tome_golem: {
+    id: 'tome_golem', name: 'Tome Golem', sprite: 'tomegolem', behavior: 'chase',
+    hp: 200, speed: 26, damage: 20, radius: 15, xp: 16, coinChance: 1, mass: 0.85, color: 0x8a5a3a, armor: 6,
+    lore: 'An encyclopedia bound in iron. Small hits bounce off the cover.',
+  },
+  echo_moth: {
+    id: 'echo_moth', name: 'Echo Moth', sprite: 'moth', behavior: 'flyer',
+    hp: 10, speed: 86, damage: 6, radius: 6, xp: 1, coinChance: 0.15, mass: 0.05, color: 0x8a6ad0,
+    splitInto: 'moth_echo', splitCount: 1,
+    lore: 'It eats silence. Kill one and its echo flutters on a moment longer.',
+  },
+  moth_echo: {
+    id: 'moth_echo', name: 'Moth Echo', sprite: 'mothecho', behavior: 'flyer',
+    hp: 4, speed: 104, damage: 5, radius: 5, xp: 1, coinChance: 0.05, mass: 0.05, color: 0xb8a0ff,
+    lore: 'The last flutter of an Echo Moth. Gone the moment it is touched.',
+  },
+  // ---------------- Chapter 5: the Hive Below
+  broodling: {
+    id: 'broodling', name: 'Broodling', sprite: 'broodling', behavior: 'chase',
+    hp: 5, speed: 66, damage: 5, radius: 5, xp: 1, coinChance: 0.08, mass: 0.05, color: 0xa0d040,
+    lore: 'The swarm in its smallest form. There are always, always more.',
+  },
+  acid_spitter: {
+    id: 'acid_spitter', name: 'Acid Spitter', sprite: 'spitter', behavior: 'spitter',
+    hp: 32, speed: 38, damage: 11, radius: 9, xp: 4, coinChance: 0.45, mass: 0.2, color: 0x9aff3d,
+    lore: 'It lobs a glob where you are going to be. The glob stays there. Do not stay there.',
+  },
+  carapace_charger: {
+    id: 'carapace_charger', name: 'Carapace Charger', sprite: 'charger', behavior: 'charger',
+    hp: 80, speed: 40, damage: 15, radius: 12, xp: 8, coinChance: 0.7, mass: 0.7, color: 0xd08a3d, armor: 4,
+    lore: 'A battering ram with legs. It lowers its horn, marks a line, and goes.',
+  },
+  egg_sac: {
+    id: 'egg_sac', name: 'Egg Sac', sprite: 'eggsac', behavior: 'egg',
+    hp: 46, speed: 0, damage: 0, radius: 10, xp: 3, coinChance: 0.3, mass: 1, color: 0xe8c850,
+    lore: 'Leave it and it hatches. Pop it before the shell splits.',
+  },
+  hive_drone: {
+    id: 'hive_drone', name: 'Hive Drone', sprite: 'hivedrone', behavior: 'flyer',
+    hp: 16, speed: 80, damage: 7, radius: 7, xp: 2, coinChance: 0.25, mass: 0.1, color: 0xffb33d,
+    lore: 'The swarm’s scouts. Where one goes, the rest follow.',
+  },
+  hive_node: {
+    id: 'hive_node', name: 'Armoured Node', sprite: 'hivenode', behavior: 'node',
+    hp: 300, speed: 0, damage: 16, radius: 12, xp: 3, coinChance: 0.6, mass: 1, color: 0xff6a8a, armor: 3,
+    lore: 'A knot of the Swarm Mind’s nerves, wrapped in carapace. While any node beats, the Mind barely feels your blows.',
+  },
   // ---------------- Chapter 3: the Black Sun
   rift_wraith: {
     id: 'rift_wraith', name: 'Rift Wraith', sprite: 'rift', behavior: 'blinker',
@@ -229,6 +292,26 @@ export interface MiniBossDef {
 }
 
 export const MINIBOSSES: Record<string, MiniBossDef> = {
+  archivist: {
+    id: 'archivist', name: 'The Archivist', sprite: 'archivist', twist: 'regen',
+    hp: 1100, speed: 42, damage: 16, radius: 18, color: 0x7ab8ff,
+    lore: 'Keeper of every book ever written, including the one about you. It reads your last spell back at you.',
+  },
+  ice_wyrm: {
+    id: 'ice_wyrm', name: 'The Ice Wyrm', sprite: 'wyrm', twist: 'fast',
+    hp: 1050, speed: 62, damage: 17, radius: 20, color: 0x9fe8ff,
+    lore: 'It swims through snow like water. When the ground starts to bulge, move.',
+  },
+  hive_knight: {
+    id: 'hive_knight', name: 'The Hive Knight', sprite: 'hiveknight', twist: 'shielded',
+    hp: 1150, speed: 46, damage: 18, radius: 19, color: 0xd08a3d,
+    lore: 'The swarm grew itself a champion and armoured it in its own shell. Wait out the carapace, then strike.',
+  },
+  twin_larva: {
+    id: 'twin_larva', name: 'The Twin Larvae', sprite: 'larva', twist: 'splits',
+    hp: 700, speed: 44, damage: 18, radius: 17, color: 0xa0d040,
+    lore: 'Two halves of one hunger. Kill one and the other grows frantic.',
+  },
   void_hound: {
     id: 'void_hound', name: 'The Twin-Headed Void Hound', sprite: 'hound', twist: 'fast',
     hp: 1000, speed: 82, damage: 18, radius: 19, color: 0xb36bff,
@@ -295,6 +378,34 @@ export interface BossDef {
 }
 
 export const BOSSES: Record<string, BossDef> = {
+  librarian: {
+    id: 'librarian',
+    name: 'The Librarian of Silence',
+    sprite: 'librarian',
+    hp: 23000,
+    radius: 42,
+    damage: 27,
+    speed: 22,
+    phases: [1, 0.66, 0.33],
+    color: 0x7ab8ff,
+    lore: 'It catalogued every sound until there were none left. Inside its circles of silence, your weapons fall quiet.',
+    anchorY: 0.62,
+    music: 'boss_librarian',
+  },
+  swarm_mind: {
+    id: 'swarm_mind',
+    name: 'The Swarm Mind',
+    sprite: 'swarmmind',
+    hp: 25000,
+    radius: 48,
+    damage: 28,
+    speed: 16,
+    phases: [1, 0.66, 0.33],
+    color: 0xff6a8a,
+    lore: 'Every crawler, drone and wraith was a thought it had. Break its nodes, then break the mind.',
+    anchorY: 0.58,
+    music: 'boss_mind',
+  },
   star_titan: {
     id: 'star_titan',
     name: 'The Fallen Star-Titan',
