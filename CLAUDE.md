@@ -66,11 +66,16 @@ Settings has a testing toggle that unlocks everything.
 
 ## State of the game
 
-- Story: 3 chapters (Starship Graveyard → Cathedral Moon → Black Sun), 5 rounds each, kill meters, 2 alternating minis,
-  a 3-phase boss, story cards; epilogue + credits after Chapter 3. The boss drops a Victory Cache (coins, a Star Shard
+- Story: 5 chapters (Starship Graveyard → Cathedral Moon → Black Sun → Frozen Archive → Hive Below), 5 rounds each,
+  kill meters, 2 alternating minis, a 3-phase boss, story cards; Chapter 3 ends on a cliffhanger card, epilogue +
+  credits after Chapter 5 (the last `MAP_ORDER` entry). The boss drops a Victory Cache (coins, a Star Shard
   roll with a jackpot, mastery XP); then See results or Overtime (Endless scaling from the final round, a great boss
   every 150 s). `MAP_ORDER` in maps.ts is the chapter order; the finale logic keys off the last entry.
 - Endless on every cleared chapter's map.
+- Chapter IV / V systems: snow, footprints and whiteouts are `src/game/weather.ts` (maps with `snow: true`); enemy-made
+  floor patches (Frost Scribe glyphs, acid puddles) are `hazards.addField`; new behaviours `diver`, `scribe`, `spitter`,
+  `charger`, `egg`, `node` in `updateEnemies`. The Librarian's silence circles (`g.silenceZones`, weapons stop firing)
+  and the Swarm Mind's shrinking arena (`g.arena`) live on Game. Art: `archiveArt.ts`, `hiveArt.ts`.
 - Heroes: all six are playable — Warden (from the start), Glint, Voidcaller, Riven, Fortune, Pyre (unlocked by
   `HERO_UNLOCKS` in `src/systems/heroes.ts`; `isHeroUnlocked` / `syncHeroUnlocks` in `src/core/meta.ts`; celebrated
   heroes are recorded in `save.data.heroes.unlocked`). Passive numbers + pure rules: `src/systems/heroes.ts`; wired

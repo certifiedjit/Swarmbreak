@@ -1,5 +1,49 @@
 # Changelog
 
+## Phase 3 — two new chapters
+
+**What changed**
+
+- **Chapter IV — The Frozen Archive.** A library buried in snow: snow-covered floor with drifts, half-buried shelves,
+  frozen pillars, ice spikes and lost books; **snow falls all the time** (drifting with the wind, thinner with Reduced
+  effects), **your footprints** trail behind you, and every 2½–3½ minutes a **whiteout** blows through (heavier snow, a
+  steady side-wind, white fog closing in at the edges — bullets and warnings stay drawn on top).
+  - Enemies: Page Wraiths (circle in flocks, then dive along a marked line), Ink Hounds (lunge), Frost Scribes (write
+    slowing glyphs where you stand), Tome Golems (armoured), Echo Moths (leave a fluttering echo when killed).
+  - Hazards: blizzard gusts (chevrons on the ground show the wind, then it shoves everyone) and freezing floor patches.
+  - Minis: **the Archivist** (reads your last spell back at you — a dash becomes a charge, Nova a blast, Chrono Hush a
+    chill…) and **the Ice Wyrm** (dives under the snow; the ground bulges, then it erupts under you).
+  - Boss: **the Librarian of Silence** — circles of silence where your weapons stop firing, page-storm spirals, and
+    shelves that fall along marked lines (a grid in later phases).
+- **Chapter V — The Hive Below.** Living tunnels lit by glowing nodules.
+  - Enemies: Broodlings (huge numbers), Acid Spitters (lob globs that leave acid), Carapace Chargers (long marked
+    charges), Egg Sacs (hatch into broodlings if you don't pop them), Hive Drones.
+  - Hazards: egg fields (nests that pulse, then spill broodlings) and acid pools.
+  - Minis: **the Hive Knight** (carapace shield, charges, spear sweeps) and **the Twin Larvae** (always two; the
+    survivor goes frantic).
+  - Boss: **the Swarm Mind** — calls swarm waves around you, guarded by armoured nodes you must break, and in its last
+    phase the **arena shrinks** (outside the ring hurts).
+- Story: Chapter 3 now ends on a cliffhanger card; new story cards and scenes for IV and V; the epilogue and credits
+  (now listing all six heroes and five bosses) follow Chapter V. Music and a boss track for each chapter.
+- Endless on both new maps, with their enemies phasing in. New achievements (clear IV, clear V) with menu backgrounds;
+  "Waking Nightmare" now means every chapter.
+
+**Balance (bot, Warden, no meta):** Black Sun 1/3 (414 s); Frozen Archive 1/5 cleared (+1 reached the boss); Hive
+Below 1/5 cleared (+1 reached the boss). Each chapter's round HP and kill counts are above the last (a test checks
+this). The early tuning showed the new swarmers and slows stacked up on the slow Warden, so the Archive's slows are
+milder than they first were. With a round-5 build the bot beats the Librarian in ~60 s and the Swarm Mind in ~130 s.
+Endless and Overtime on both maps run clean; sim cost stays under 0.6 ms/frame with 400+ enemies.
+
+**What to try**
+
+1. Settings → "Unlock everything", then Story → Chapter IV. Watch the snow and your footprints; wait for a whiteout
+   (or a gust: brace when the chevrons appear).
+2. Let a Frost Scribe write under you (you slow down), and fight the Archivist after casting your spell a few times.
+3. In the Librarian fight, stand in a circle of silence once to feel it, then learn to step out.
+4. Chapter V: pop Egg Sacs before they hatch, break the Swarm Mind's nodes, and stay inside the ring in phase 3.
+5. Beat Chapter III to see the new cliffhanger, and Chapter V for the epilogue and credits.
+6. Tell me if either chapter feels too punishing for a human — the bot thinks they are hard, but it walks into crowds.
+
 ## Phase 2 — unlocks, achievements, cosmetics, difficulty
 
 **What changed**
