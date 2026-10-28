@@ -7,7 +7,7 @@ import type { Application } from 'pixi.js';
 import { audio } from '../audio/audio';
 import { easeOutCubic, formatTime } from '../core/math';
 import { seedToCode } from '../core/rng';
-import { DEFAULT_KEYS, isEndlessUnlocked, resetSave, save, type Action } from '../core/save';
+import { DEFAULT_KEYS, isEndlessUnlocked, resetSave, save, testingToolsAllowed, type Action } from '../core/save';
 import { CHARACTERS, CHARACTER_IDS } from '../data/characters';
 import { COSMETICS, COSMETIC_BY_ID, COSMETIC_KINDS, NUMBER_STYLES, cosmeticsFor, type CosmeticDef, type CosmeticKind } from '../data/cosmetics';
 import { ACHIEVEMENTS, achievementProgress, rewardText, sourceOf, type AchievementDef } from '../systems/achievements';
@@ -742,7 +742,7 @@ export class UI implements GameUI {
             'div',
             { class: 'set-group' },
             h('h3', null, 'Testing'),
-            toggle('Unlock everything', () => s.unlockAll, (v) => (s.unlockAll = v), 'Opens Endless, every map you could reach and every hero, without earning them'),
+            testingToolsAllowed() ? toggle('Unlock everything', () => s.unlockAll, (v) => (s.unlockAll = v), 'Testing only: opens every map, hero, tier, weapon and cosmetic without earning them') : null,
             h('div', { class: 'row' }, resetBtn),
           ),
       h('div', { class: 'row end' }, this.btn('Back', onBack, 'primary')),

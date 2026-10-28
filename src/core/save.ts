@@ -137,11 +137,23 @@ export function upgradeSave(d: SaveData): SaveData {
   return d;
 }
 
+/** the "Unlock everything" testing toggle exists in dev builds, or with ?debug in the URL */
+export function testingToolsAllowed(): boolean {
+  try {
+    return import.meta.env.DEV || location.search.includes('debug');
+  } catch {
+    return false;
+  }
+}
+
 export function loadSave(): SaveData {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return defaultSave();
-    return upgradeSave(merge(defaultSave(), JSON.parse(raw)));
+    const d = upgradeSave(merge(defaultSave(), JSON.parse(raw)));
+    // a public build never honours a testing toggle left on from a dev session
+    if (!testingToolsAllowed()) d.settings.unlockAll = false;
+    return d;
   } catch {
     return defaultSave();
   }
